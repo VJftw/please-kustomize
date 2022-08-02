@@ -1,0 +1,91 @@
+"""
+Build rules for working with Kubernetes configuration and
+[Kustomize](https://kustomize.io).
+"""
+
+def k8s_config(
+    name: str,
+    srcs: list = [],
+    images: list = [],
+    create_only: bool = False,
+    visibility: list = [],
+    labels: list = [],
+):
+    # concat all yamls into one
+    consolidated_k8s_config_rule=genrule(
+        name = f"_{name}#consolidated",
+        srcs = srcs,
+        outs = [f"_{name}#consolidated.yaml"],
+        cmd = """
+        mapfile -t src_yamls < <(find . -name '*.yaml')
+        for src in "${src_yamls[@]}"; do
+            first_non_comment_line="$(grep -Em1 "^[^#].*$")"
+            if [ "$first_non_comment_line" != "---" ]; then
+                echo "---" >> $OUTS
+            fi
+            cat "$src" >> $OUTS
+        done
+        """,
+    )
+
+    if create_only:
+        labels += ["create_only"]
+
+    filegroup(
+        name = name,
+        srcs = [consolidated_k8s_config_rule],
+        deps = images,
+        exported_deps = images,
+        visibility = visibility,
+        labels = labels,
+    )
+
+def kustomized_config(
+    name: str,
+    srcs: list = [],
+    images: list = [],
+    deps: list = [],
+    visibility: list = [],
+):
+    """Build rule for building Kustomize projects.
+
+    Args:
+        name: The name of the build rule.
+        srcs: The source kustomize resources including the kustomization.yaml
+        images: The docker images that the resources use. These will be added as
+                exported deps, thus are queryable later.
+        visibility: The targets to make the kustomized configuration visible to.
+    """
+    kustomize_tool = CONFIG.K8S.KUSTOMIZE_TOOL
+
+    deps = [canonicalise(d) for d in deps]
+    kustomized_rule=genrule(
+        name = f"{name}_kustomized",
+        srcs = srcs,
+        outs = [f"{name}_kustomized.yaml"],
+        cmd = f"""
+set -Eeuo pipefail
+kustomization_file="$PKG/kustomization.yaml"
+if [ ! -f "${kustomization_file}" ]; then
+    echo "missing kustomization file in $PKG"
+    exit 1
+fi
+$TOOLS build $PKG > $HOME/$OUTS
+        """,
+        tools = [kustomize_tool],
+        deps = [f"{d}_srcs" for d in deps] + deps,
+        visibility = visibility,
+    )
+
+    filegroup(
+        name = f"{name}_srcs",
+        srcs = srcs,
+        visibility = visibility,
+    )
+
+    return k8s_config(
+        name = name,
+        srcs = [kustomized_rule],
+        visibility = visibility,
+        images = images,
+    )

@@ -1,0 +1,21 @@
+; Please config file
+; Leaving this file as is is enough to use plz to build your project.
+; Please will stay on whatever version you currently have until you run
+; 'plz update', when it will download the latest available version.
+;
+; Or you can uncomment the following to pin everyone to a particular version;
+; when you change it all users will automatically get updated.
+[please]
+version = 16.21.3
+
+; Define the Plugin configuration options.
+[PluginDefinition]
+name = k8s
+
+[PluginConfig "kustomize_tool"]
+DefaultValue = "//third_party/binary/kubernetes-sigs/kustomize:kustomize"
+Optional = true
+Inherit = true
+
+; Use the plugin in this repository for tests.
+[Plugin "k8s"]

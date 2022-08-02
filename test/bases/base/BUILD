@@ -1,0 +1,10 @@
+subinclude("//build_defs:k8s")
+
+kustomized_config(
+    name = "k8s",
+    srcs = [
+        "kustomization.yaml",
+        "configmap.yaml",
+    ],
+    visibility = ["//test/bases/overlay/..."],
+)
