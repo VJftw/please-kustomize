@@ -1,0 +1,98 @@
+"""
+Build rules for working with [Helm](https://helm.sh).
+"""
+
+def helm_package(
+    name: str,
+    srcs: list,
+    values_files: list = [],
+    images: list = [],
+    labels: list = [],
+    visibility: list = [],
+):
+    """Build rule for creating and deploying Helm Packages.
+
+    Args:
+        name: The name of the Helm Package.
+        srcs: The sources for the Helm Chart. This should be a collection of
+              files with a 'Chart.yaml' amongst them following the structure of
+              a real Helm chart.
+        images: The docker images that the resources use. These will be added as
+                exported deps, thus are queryable later.
+        values_files: Custom values files to use when installing or templating
+                      the package.
+        labels: Additional Please labels.
+        visibility: The Please targets to make this Helm package visibile to.
+    """
+    helm_tool = CONFIG.K8S.HELM_TOOL
+    package=genrule(
+        name = name,
+        srcs = srcs,
+        outs = [f"{name}_package/"],
+        cmd = """
+        $TOOL package $(find . -name 'Chart.yaml' | xargs dirname | head -n1) && mkdir -p $OUTS && mv *.tgz $OUTS
+        """,
+        tools = [helm_tool],
+        visibility = visibility,
+    )
+
+    values_files_targets = []
+    for trgt in values_files:
+        if not (trgt.startswith("//") or trgt.startswith(":")):
+            trgt=export_file(
+                name = f"values_{trgt}",
+                src = trgt,
+            )
+        values_files_targets += [trgt]
+
+    values_files_flags = [f"-f $(out_location {f})" for f in values_files_targets]
+    values_files_cmd = " ".join(values_files_flags)
+
+    sh_cmd(
+        name = f"{name}_install",
+        data = [package, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {package})/*.tgz \\\$@
+        """
+    )
+
+    sh_cmd(
+        name = f"{name}_template",
+        data = [package, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {package})/*.tgz \\\$@
+        """
+    )
+
+    sh_cmd(
+        name = f"{name}_lint",
+        data = [package, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) lint $(out_location {package})/*.tgz
+        """,
+        labels = ["lint"]
+    )
+
+    for show_cmd in [
+        "chart",
+        "crds",
+        "readme",
+        "values",
+    ]:
+        sh_cmd(
+            name = f"{name}_show_{show_cmd}",
+            data = [package, helm_tool],
+            shell = "/usr/bin/env bash",
+            cmd = f"""
+    set -Eexuo pipefail
+    $(out_exe {helm_tool}) show {show_cmd} $(out_location {package})/*.tgz
+            """
+        )
+
+    return package

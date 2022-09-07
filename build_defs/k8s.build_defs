@@ -11,11 +11,13 @@ def k8s_config(
     visibility: list = [],
     labels: list = [],
 ):
+    pkg=package_name()
+    pkg=pkg.replace("/", "_")
     # concat all yamls into one
     consolidated_k8s_config_rule=genrule(
         name = f"_{name}#consolidated",
         srcs = srcs,
-        outs = [f"_{name}#consolidated.yaml"],
+        outs = [f"{pkg}_{name}#consolidated.yaml"],
         cmd = """
         mapfile -t src_yamls < <(find . -name '*.yaml')
         for src in "${src_yamls[@]}"; do

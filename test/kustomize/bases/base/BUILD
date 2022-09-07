@@ -6,5 +6,5 @@ kustomized_config(
         "kustomization.yaml",
         "configmap.yaml",
     ],
-    visibility = ["//test/bases/overlay/..."],
+    visibility = ["//test/kustomize/bases/overlay/..."],
 )

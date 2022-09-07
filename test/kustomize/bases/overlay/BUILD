@@ -6,6 +6,6 @@ kustomized_config(
         "kustomization.yaml",
     ],
     deps = [
-        "//test/bases/base:k8s",
+        "//test/kustomize/bases/base:k8s",
     ],
 )

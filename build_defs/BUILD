@@ -3,3 +3,9 @@ export_file(
     src = "k8s.build_defs",
     visibility = ["PUBLIC"],
 )
+
+export_file(
+    name = "helm",
+    src = "helm.build_defs",
+    visibility = ["PUBLIC"],
+)
