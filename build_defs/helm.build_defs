@@ -6,6 +6,7 @@ def helm_package(
     name: str,
     srcs: list,
     chart_yaml_file: str = "",
+    templates: list = [],
     values_files: list = [],
     images: list = [],
     labels: list = [],
@@ -24,6 +25,9 @@ def helm_package(
                          you to define multiple charts in the same Please
                          Pkg. Leaving this blank assumes one already exists in
                          the srcs.
+        templates: The files to use as templates. These will be placed in the
+                   templates folder. This will overwrite existing templates with
+                   the same filename.
         values_files: Custom values files to use when installing or templating
                       the package.
         labels: Additional Please labels.
@@ -38,14 +42,25 @@ def helm_package(
 
     package=genrule(
         name = name,
-        srcs = srcs,
+        srcs = {
+            "srcs": srcs,
+            "templates": templates,
+        },
         outs = [f"{name}.tgz"],
         cmd = f"""
         set -x
         chart_yaml_path="$(find . -name '{chart_yaml_file}' | head -n1)"
         expected_chart_yaml_path="$(dirname "${{chart_yaml_path}}")/Chart.yaml"
         mv "$chart_yaml_path" "$expected_chart_yaml_path"
-        $TOOL package "$(dirname "$expected_chart_yaml_path")" && mv *.tgz $OUTS
+        chart_dir="$(dirname "$expected_chart_yaml_path")"
+        # shift templates into templates/
+        if [ -v SRCS_TEMPLATES ]; then
+            mkdir -p "${{chart_dir}}/templates"
+            for tmpl in $SRCS_TEMPLATES; do
+                cp "$tmpl" "${{chart_dir}}/templates/"
+            done
+        fi
+        $TOOL package "$chart_dir" && mv *.tgz $OUTS
         """,
         tools = [helm_tool],
         visibility = visibility,

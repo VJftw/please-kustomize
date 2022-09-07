@@ -9,5 +9,6 @@ helm_package(
 helm_package(
     name = "my-other-chart",
     chart_yaml_file = "other-chart.yaml",
-    srcs = glob(["**/*"]),
+    srcs = glob(["templates/*", "values.yaml"]),
+    templates = glob(["additional-templates/*"])
 )
