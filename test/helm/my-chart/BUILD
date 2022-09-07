@@ -4,3 +4,9 @@ helm_package(
     name = "my-chart",
     srcs = glob(["**/*"]),
 )
+
+helm_package(
+    name = "my-other-chart",
+    chart_yaml_file = "other-chart.yaml",
+    srcs = glob(["**/*"]),
+)

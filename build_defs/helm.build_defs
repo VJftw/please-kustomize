@@ -5,6 +5,7 @@ Build rules for working with [Helm](https://helm.sh).
 def helm_package(
     name: str,
     srcs: list,
+    chart_yaml_file: str = "Chart.yaml",
     values_files: list = [],
     images: list = [],
     labels: list = [],
@@ -19,6 +20,9 @@ def helm_package(
               a real Helm chart.
         images: The docker images that the resources use. These will be added as
                 exported deps, thus are queryable later.
+        chart_yaml_file: The file to use as the 'Chart.yaml'. This enables
+                         you to define multiple charts in the same Please
+                         Pkg.
         values_files: Custom values files to use when installing or templating
                       the package.
         labels: Additional Please labels.
@@ -27,10 +31,14 @@ def helm_package(
     helm_tool = CONFIG.K8S.HELM_TOOL
     package=genrule(
         name = name,
-        srcs = srcs,
+        srcs = srcs + [chart_yaml_file],
         outs = [f"{name}.tgz"],
-        cmd = """
-        $TOOL package $(find . -name 'Chart.yaml' | xargs dirname | head -n1) && mv *.tgz $OUTS
+        cmd = f"""
+        set -x
+        chart_yaml_path="$(find . -name '{chart_yaml_file}' | head -n1)"
+        expected_chart_yaml_path="$(dirname "${{chart_yaml_path}}")/Chart.yaml"
+        mv "$chart_yaml_path" "$expected_chart_yaml_path"
+        $TOOL package "$(dirname "$expected_chart_yaml_path")" && mv *.tgz $OUTS
         """,
         tools = [helm_tool],
         visibility = visibility,
@@ -96,3 +104,21 @@ $(out_exe {helm_tool}) lint $(out_location {package})
         )
 
     return package
+
+def gen_chart_yaml_cmd(
+    name: str,
+    description: str = "",
+    type: str = "application",
+    version: str = "0.0.0",
+    appVersion: str = "0.0.0",
+):
+    return f"""
+cat <<EOF > Chart.yaml
+apiVersion: v2
+name: "{name}"
+description: "{description}"
+type: "application"
+version: {version}
+appVersion: "{appVersion}"
+EOF
+    """
