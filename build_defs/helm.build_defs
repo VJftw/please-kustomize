@@ -28,9 +28,9 @@ def helm_package(
     package=genrule(
         name = name,
         srcs = srcs,
-        outs = [f"{name}_package/"],
+        outs = [f"{name}.tgz"],
         cmd = """
-        $TOOL package $(find . -name 'Chart.yaml' | xargs dirname | head -n1) && mkdir -p $OUTS && mv *.tgz $OUTS
+        $TOOL package $(find . -name 'Chart.yaml' | xargs dirname | head -n1) && mv *.tgz $OUTS
         """,
         tools = [helm_tool],
         visibility = visibility,
@@ -54,7 +54,7 @@ def helm_package(
         shell = "/usr/bin/env bash",
         cmd = f"""
 set -Eexuo pipefail
-$(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {package})/*.tgz \\\$@
+$(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {package}) \\\$@
         """
     )
 
@@ -64,7 +64,7 @@ $(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {package
         shell = "/usr/bin/env bash",
         cmd = f"""
 set -Eexuo pipefail
-$(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {package})/*.tgz \\\$@
+$(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {package}) \\\$@
         """
     )
 
@@ -74,7 +74,7 @@ $(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {packag
         shell = "/usr/bin/env bash",
         cmd = f"""
 set -Eexuo pipefail
-$(out_exe {helm_tool}) lint $(out_location {package})/*.tgz
+$(out_exe {helm_tool}) lint $(out_location {package})
         """,
         labels = ["lint"]
     )
@@ -91,7 +91,7 @@ $(out_exe {helm_tool}) lint $(out_location {package})/*.tgz
             shell = "/usr/bin/env bash",
             cmd = f"""
     set -Eexuo pipefail
-    $(out_exe {helm_tool}) show {show_cmd} $(out_location {package})/*.tgz
+    $(out_exe {helm_tool}) show {show_cmd} $(out_location {package})
             """
         )
 
