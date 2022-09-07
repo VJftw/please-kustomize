@@ -5,7 +5,7 @@ Build rules for working with [Helm](https://helm.sh).
 def helm_package(
     name: str,
     srcs: list,
-    chart_yaml_file: str = "Chart.yaml",
+    chart_yaml_file: str = "",
     values_files: list = [],
     images: list = [],
     labels: list = [],
@@ -22,16 +22,23 @@ def helm_package(
                 exported deps, thus are queryable later.
         chart_yaml_file: The file to use as the 'Chart.yaml'. This enables
                          you to define multiple charts in the same Please
-                         Pkg.
+                         Pkg. Leaving this blank assumes one already exists in
+                         the srcs.
         values_files: Custom values files to use when installing or templating
                       the package.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
+
+    if chart_yaml_file:
+        srcs += [chart_yaml_file]
+    else:
+        chart_yaml_file = "Chart.yaml"
+
     package=genrule(
         name = name,
-        srcs = srcs + [chart_yaml_file],
+        srcs = srcs,
         outs = [f"{name}.tgz"],
         cmd = f"""
         set -x

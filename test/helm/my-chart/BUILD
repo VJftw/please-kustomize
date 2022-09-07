@@ -3,6 +3,7 @@ subinclude("//build_defs:helm")
 helm_package(
     name = "my-chart",
     srcs = glob(["**/*"]),
+    chart_yaml_file = "Chart.yaml",
 )
 
 helm_package(
