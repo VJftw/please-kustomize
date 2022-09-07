@@ -4,9 +4,10 @@ Build rules for working with [Helm](https://helm.sh).
 
 def helm_package(
     name: str,
-    srcs: list,
-    chart_yaml_file: str = "",
-    templates: list = [],
+    srcs: list = [],
+    src_chart_yaml: str = "",
+    src_templates: list = [],
+    src_values: str = "",
     values_files: list = [],
     images: list = [],
     labels: list = [],
@@ -21,13 +22,16 @@ def helm_package(
               a real Helm chart.
         images: The docker images that the resources use. These will be added as
                 exported deps, thus are queryable later.
-        chart_yaml_file: The file to use as the 'Chart.yaml'. This enables
+        src_chart_yaml: The file to use as the 'Chart.yaml'. This enables
                          you to define multiple charts in the same Please
                          Pkg. Leaving this blank assumes one already exists in
                          the srcs.
-        templates: The files to use as templates. These will be placed in the
-                   templates folder. This will overwrite existing templates with
-                   the same filename.
+        src_templates: The files to use as templates. These will be placed in
+                       the templates folder. This will overwrite existing
+                       templates with the same filename. Leaving this blank
+                       assumes they already exist in the srcs.
+        src_values: The values file to use to use as default values. Leaving
+                    this blank assumes one already exists in the srcs.
         values_files: Custom values files to use when installing or templating
                       the package.
         labels: Additional Please labels.
@@ -35,24 +39,31 @@ def helm_package(
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
 
-    if chart_yaml_file:
-        srcs += [chart_yaml_file]
-    else:
-        chart_yaml_file = "Chart.yaml"
+    chart_yaml_to_find="Chart.yaml"
+
+    if src_chart_yaml:
+        srcs += [src_chart_yaml]
+        chart_yaml_to_find=src_chart_yaml
+
+    srcs_values=[]
+    if src_values:
+        srcs_values+=[src_values]
 
     package=genrule(
         name = name,
         srcs = {
             "srcs": srcs,
-            "templates": templates,
+            "templates": src_templates,
+            "values": srcs_values,
         },
         outs = [f"{name}.tgz"],
         cmd = f"""
         set -x
-        chart_yaml_path="$(find . -name '{chart_yaml_file}' | head -n1)"
+        chart_yaml_path="$(find . -name '{chart_yaml_to_find}' | head -n1)"
         expected_chart_yaml_path="$(dirname "${{chart_yaml_path}}")/Chart.yaml"
         mv "$chart_yaml_path" "$expected_chart_yaml_path"
         chart_dir="$(dirname "$expected_chart_yaml_path")"
+
         # shift templates into templates/
         if [ -v SRCS_TEMPLATES ]; then
             mkdir -p "${{chart_dir}}/templates"
@@ -60,6 +71,12 @@ def helm_package(
                 cp "$tmpl" "${{chart_dir}}/templates/"
             done
         fi
+
+        # shift values to values.yaml
+        if [ -v SRCS_VALUES ]; then
+            cp "$SRCS_VALUES" "${{chart_dir}}/values.yaml"
+        fi
+
         $TOOL package "$chart_dir" && mv *.tgz $OUTS
         """,
         tools = [helm_tool],
