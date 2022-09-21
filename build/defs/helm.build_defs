@@ -7,7 +7,7 @@ def helm_application(
     description: str = "A Helm chart for Kubernetes.",
     app_version: str = "0.0.0",
     src_templates: list,
-    src_values: str,
+    src_values: str = "",
     values_files: list = [],
     labels: list = [],
     visibility: list = [],
@@ -28,10 +28,14 @@ def helm_application(
         visibility: The Please targets to make this Helm package visibile to.
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
+    
+    srcs_values = []
+    if src_values:
+      srcs_values += [src_values]
 
     context=tarball(
         name = f"_{name}#context.tar",
-        srcs = src_templates + [src_values],
+        srcs = src_templates + srcs_values,
     )
 
     chart_yaml=genrule(
@@ -56,7 +60,7 @@ EOF
         srcs = {
             "chart_yaml": [chart_yaml],
             "templates": src_templates,
-            "values": src_values,
+            "values": srcs_values,
         },
         output_dirs = ["outs"],
         cmd = f"""
