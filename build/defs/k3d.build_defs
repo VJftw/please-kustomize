@@ -1,0 +1,37 @@
+"""
+Build rules for working with local [K3D](https://k3d.io) clusters.
+"""
+
+def k3d_cluster(
+    name: str,
+    config: str,
+):
+    if not config.startswith("//"):
+        config=export_file(
+            name = f"_{name}#config",
+            src = config,
+        )
+
+    sh_cmd(
+        name = f"{name}_setup",
+        shell = "/usr/bin/env bash",
+        data = ["//build/k3d:setup", config],
+        cmd = f"""
+set -Eeuo pipefail
+K3D_CONFIG="$(out_location {config})"
+
+source $(out_location //build/k3d:setup)
+        """,
+    )
+
+    sh_cmd(
+        name = f"{name}_teardown",
+        shell = "/usr/bin/env bash",
+        data = ["//build/k3d:teardown", config],
+        cmd = f"""
+set -Eeuo pipefail
+K3D_CONFIG="$(out_location {config})"
+
+source $(out_location //build/k3d:teardown)
+        """,
+    )

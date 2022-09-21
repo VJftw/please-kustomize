@@ -1,4 +1,4 @@
-subinclude("//build_defs:k8s")
+subinclude("//build/defs:k8s")
 
 kustomized_config(
     name = "k8s",

@@ -1,0 +1,31 @@
+apiVersion: k3d.io/v1alpha4
+kind: Simple
+metadata:
+  name: example
+servers: 1
+agents: 2
+# see https://hub.docker.com/r/rancher/k3s/tags
+image: rancher/k3s:v1.22.8-k3s1
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - agent:*
+  - port: 8443:443
+    nodeFilters:
+      - agent:*
+options:
+  k3s:
+    extraArgs:
+      # skip Traefik as we're using kubernetes/ingress-nginx
+      - arg: --no-deploy=traefik
+        nodeFilters:
+          - server:*
+    nodeLabels:
+      - label: ingress-ready=true
+        nodeFilters:
+          - agent:*
+# registries:
+#   create:
+#     name: registry.example.localhost
+#     host: "0.0.0.0"
+#     hostPort: "5000"

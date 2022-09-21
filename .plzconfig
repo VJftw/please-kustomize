@@ -11,6 +11,7 @@ version = 16.21.3
 ; Define the Plugin configuration options.
 [PluginDefinition]
 name = k8s
+BuildDefsDir = "build/defs"
 
 [PluginConfig "kustomize_tool"]
 DefaultValue = "//third_party/binary/kubernetes-sigs/kustomize:kustomize"
@@ -19,6 +20,16 @@ Inherit = true
 
 [PluginConfig "helm_tool"]
 DefaultValue = "//third_party/binary/helm/helm:helm"
+Optional = true
+Inherit = true
+
+[PluginConfig "k3d_tool"]
+DefaultValue = "//third_party/binary/rancher/k3d:k3d"
+Optional = true
+Inherit = true
+
+[PluginConfig "yq_tool"]
+DefaultValue = "//third_party/binary/mikefarah/yq:yq"
 Optional = true
 Inherit = true
 

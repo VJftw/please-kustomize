@@ -1,14 +1,12 @@
 remote_file(
     name = "traefik_chart_download",
-    url = "https://github.com/traefik/traefik-helm-chart/archive/refs/tags/v10.24.2.zip",
-    extract = True,
-    exported_files = ["traefik-helm-chart-10.24.2/traefik/"]
+    url = "https://helm.traefik.io/traefik/traefik-10.24.3.tgz",
 )
 
-subinclude("//build_defs:helm")
+subinclude("//build/defs:helm")
 
-helm_package(
+helm_chart(
     name = "traefik",
-    srcs = [":traefik_chart_download"],
+    src_chart = ":traefik_chart_download",
     values_files = ["custom_values.yaml"],
 )

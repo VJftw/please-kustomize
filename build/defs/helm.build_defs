@@ -1,0 +1,188 @@
+"""
+Build rules for working with [Helm](https://helm.sh).
+"""
+
+def helm_application(
+    name: str,
+    description: str = "A Helm chart for Kubernetes.",
+    app_version: str = "0.0.0",
+    src_templates: list,
+    src_values: str,
+    values_files: list = [],
+    labels: list = [],
+    visibility: list = [],
+):
+    """
+    Build rule for creating Helm Application packages.
+
+    Args:
+        name: The name of the Helm Package.
+        description: The description of the Helm package.
+        app_version: The application version of the Helm package.
+        src_templates: The files to use as templates. These will be placed in
+                       the templates/ folder.
+        src_values: The values file to use to use as default values.
+        values_files: Custom values files to use when installing or templating
+                      the package.
+        labels: Additional Please labels.
+        visibility: The Please targets to make this Helm package visibile to.
+    """
+    helm_tool = CONFIG.K8S.HELM_TOOL
+
+    context=tarball(
+        name = f"_{name}#context.tar",
+        srcs = src_templates + [src_values],
+    )
+
+    chart_yaml=genrule(
+        name = f"_{name}#chart.yaml",
+        srcs = [context],
+        outs = [f"_{name}#chart.yaml"],
+        cmd = f"""
+version="$(echo "$(sha256sum $SRCS | cut -f1 -d" ")")"
+cat <<EOF > $OUTS
+apiVersion: v2
+name: "{name}"
+description: "{description}"
+type: "application"
+version: 0.0.0-dev+$version
+appVersion: "{app_version}"
+EOF
+        """,
+    )
+
+    package=genrule(
+        name = name,
+        srcs = {
+            "chart_yaml": [chart_yaml],
+            "templates": src_templates,
+            "values": src_values,
+        },
+        output_dirs = ["outs"],
+        cmd = f"""
+        set -e
+        chart_dir="$(mktemp -d)"
+        chart_yaml_path="$SRCS_CHART_YAML"
+        expected_chart_yaml_path="${{chart_dir}}/Chart.yaml"
+        mv "$chart_yaml_path" "$expected_chart_yaml_path"
+
+        # shift templates into templates/
+        if [ -v SRCS_TEMPLATES ]; then
+            mkdir -p "${{chart_dir}}/templates"
+            for tmpl in $SRCS_TEMPLATES; do
+                cp -r "$tmpl" "${{chart_dir}}/templates/"
+            done
+        fi
+
+        # shift values to values.yaml
+        if [ -v SRCS_VALUES ]; then
+            cp "$SRCS_VALUES" "${{chart_dir}}/values.yaml"
+        fi
+
+        mkdir -p outs/
+        $TOOL package "${{chart_dir}}" && mv *.tgz outs/
+
+        # validate that helm package works
+        $TOOL template --debug outs/*.tgz
+        """,
+        tools = [helm_tool],
+        visibility = visibility,
+    )
+
+    helm_chart(
+        name = name,
+        src_chart = package,
+        values_files = values_files,
+        visibility = visibility,
+    )
+
+    return package
+
+def helm_chart(
+    name: str,
+    src_chart: str,
+    values_files: list = [],
+    labels: list = [],
+    visibility: list = [],
+):
+    """
+    Build rule for installing and managing Helm packages.
+
+    Args:
+        name: The name of the Helm Package.
+        src_chart: The target which outputs the Helm package as a `.tgz`.
+        values_files: Custom values files to use when installing or templating
+                      the package.
+        labels: Additional Please labels.
+        visibility: The Please targets to make this Helm package visibile to.
+    """
+    helm_tool = CONFIG.K8S.HELM_TOOL
+
+    values_files_targets = []
+    for trgt in values_files:
+        if not (trgt.startswith("//") or trgt.startswith(":")):
+            trgt=export_file(
+                name = f"values_{trgt}",
+                src = trgt,
+            )
+        values_files_targets += [trgt]
+
+    values_files_flags = [f"-f $(out_location {f})" for f in values_files_targets]
+    values_files_cmd = " ".join(values_files_flags)
+
+    sh_cmd(
+        name = f"{name}_install",
+        data = [src_chart, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {src_chart}) \\\$@
+        """
+    )
+
+    sh_cmd(
+        name = f"{name}_uninstall",
+        data = [src_chart, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) uninstall {name} \\\$@
+        """
+    )
+
+    sh_cmd(
+        name = f"{name}_template",
+        data = [src_chart, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {src_chart}) \\\$@
+        """
+    )
+
+    sh_cmd(
+        name = f"{name}_lint",
+        data = [src_chart, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) lint $(out_location {src_chart})
+        """,
+        labels = ["lint"]
+    )
+
+    for show_cmd in [
+        "chart",
+        "crds",
+        "readme",
+        "values",
+    ]:
+        sh_cmd(
+            name = f"{name}_show_{show_cmd}",
+            data = [src_chart, helm_tool],
+            shell = "/usr/bin/env bash",
+            cmd = f"""
+    set -Eexuo pipefail
+    $(out_exe {helm_tool}) show {show_cmd} $(out_location {src_chart})
+            """
+        )
