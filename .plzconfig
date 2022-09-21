@@ -33,6 +33,10 @@ DefaultValue = "//third_party/binary/mikefarah/yq:yq"
 Optional = true
 Inherit = true
 
+[PluginConfig "k3d_helper_tool"]
+DefaultValue = "//build/k3d:helper"
+Optional = true
+Inherit = true
 
 ; Use the plugin in this repository for tests.
 [Plugin "k8s"]

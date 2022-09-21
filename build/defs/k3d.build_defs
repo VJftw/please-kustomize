@@ -6,6 +6,10 @@ def k3d_cluster(
     name: str,
     config: str,
 ):
+    k3d_tool = CONFIG.K8S.K3D_TOOL
+    yq_tool = CONFIG.K8S.YQ_TOOL
+    k3d_helper_tool = CONFIG.K8S.K3D_HELPER_TOOL
+
     if not config.startswith("//"):
         config=export_file(
             name = f"_{name}#config",
@@ -15,23 +19,27 @@ def k3d_cluster(
     sh_cmd(
         name = f"{name}_setup",
         shell = "/usr/bin/env bash",
-        data = ["//build/k3d:setup", config],
+        data = [k3d_helper_tool, yq_tool, k3d_tool, config],
         cmd = f"""
 set -Eeuo pipefail
-K3D_CONFIG="$(out_location {config})"
+export K3D="$(out_location {k3d_tool})"
+export YQ="$(out_location {yq_tool})"
+export K3D_CONFIG="$(out_location {config})"
 
-source $(out_location //build/k3d:setup)
+"$(out_location {k3d_helper_tool})" setup
         """,
     )
 
     sh_cmd(
         name = f"{name}_teardown",
         shell = "/usr/bin/env bash",
-        data = ["//build/k3d:teardown", config],
+        data = [k3d_helper_tool, yq_tool, k3d_tool, config],
         cmd = f"""
 set -Eeuo pipefail
-K3D_CONFIG="$(out_location {config})"
+export K3D="$(out_location {k3d_tool})"
+export YQ="$(out_location {yq_tool})"
+export K3D_CONFIG="$(out_location {config})"
 
-source $(out_location //build/k3d:teardown)
+"$(out_location {k3d_helper_tool})" teardown
         """,
     )
