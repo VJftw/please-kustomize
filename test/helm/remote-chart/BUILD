@@ -5,7 +5,7 @@ remote_file(
 
 subinclude("//build/defs:helm")
 
-helm_chart(
+helm_release(
     name = "traefik",
     src_chart = ":traefik_chart_download",
     values_files = ["custom_values.yaml"],

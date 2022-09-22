@@ -1,34 +1,84 @@
 """
 Build rules for working with [Helm](https://helm.sh).
+
+The Helm Architecture describes 3 concepts:
+
+> For Helm, there are three important concepts:
+> 1. The chart is a bundle of information necessary to create an instance of a
+>    Kubernetes application.
+> 2. The config contains configuration information that can be merged into a
+>    packaged chart to create a releasable object.
+> 3. A release is a running instance of a chart, combined with a specific
+>    config.
+
+The build definitions defined in this file consider these concepts whereby:
+
+* The `helm_chart` build definition implements 1). and 2). by outputting Helm
+  Chart packages with the given configuration.
+* The `helm_release` build definition implements 3). by enabling users to
+  specify many running instances of a given `helm_chart` or `remote_file`'d Helm
+  Chart with per release specific configuration as code.
 """
 
-def helm_application(
+DEFAULT_LABELS=["helm"]
+
+def helm_chart(
     name: str,
+    chart_type: str = "application",
     description: str = "A Helm chart for Kubernetes.",
     app_version: str = "0.0.0",
     src_templates: list,
     src_values: str = "",
-    values_files: list = [],
     labels: list = [],
     visibility: list = [],
 ):
     """
-    Build rule for creating Helm Application packages.
+    Build rule for creating Helm Charts.
+
+    A chart is a collection of files that describe a related set of Kubernetes
+    resources. A single chart might be used to deploy something simple, like a
+    memcached pod, or something complex, like a full web app stack with HTTP
+    servers, databases, caches, and so on.
+
+    https://helm.sh/docs/topics/charts/
+
+    This build rule outputs the Helm Chart as a packaged chart versioned as
+    development and tagged with a digest of the inputs as per the Semver 2.0
+    spec:
+        `0.0.0+<sh256sum of inputs>`
+
+    > https://semver.org/spec/v2.0.0.html
+    > 4. Major version zero (0.y.z) is for initial development. Anything MAY
+    >    change at any time. The public API SHOULD NOT be considered stable.
+    > 10. Build metadata MAY be denoted by appending a plus sign and a series of
+    >     dot separated identifiers immediately following the patch or
+    >     pre-release version. Identifiers MUST comprise only ASCII
+    >     alphanumerics and hyphens [0-9A-Za-z-]. Identifiers MUST NOT be empty.
+    >     Build metadata MUST be ignored when determining version precedence.
+    >     Thus two versions that differ only in the build metadata, have the
+    >     same precedence. Examples: 1.0.0-alpha+001, 1.0.0+20130313144700,
+    >     1.0.0-beta+exp.sha.5114f85, 1.0.0+21AF26D3—-117B344092BD.
+
+    Additional tooling should be used to promote a development Helm Chart into
+    a non-development, released version.
 
     Args:
-        name: The name of the Helm Package.
+        name: The name of the Helm Chart.
+        chart_type: The type of the Helm Chart. Either "application" or
+                    "library". Defaults to "application".
         description: The description of the Helm package.
         app_version: The application version of the Helm package.
         src_templates: The files to use as templates. These will be placed in
                        the templates/ folder.
         src_values: The values file to use to use as default values.
-        values_files: Custom values files to use when installing or templating
-                      the package.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
     """
+    assert chart_type in ["application", "library"], f"{chart_type} is an invalid chart_type."
+
     helm_tool = CONFIG.K8S.HELM_TOOL
-    
+    labels += DEFAULT_LABELS
+
     srcs_values = []
     if src_values:
       srcs_values += [src_values]
@@ -49,7 +99,7 @@ apiVersion: v2
 name: "{name}"
 description: "{description}"
 type: "application"
-version: 0.0.0-dev+$version
+version: 0.0.0+$version
 appVersion: "{app_version}"
 EOF
         """,
@@ -85,94 +135,116 @@ EOF
 
         mkdir -p outs/
         $TOOL package "${{chart_dir}}" && mv *.tgz outs/
-
-        # validate that helm package works
-        $TOOL template --debug outs/*.tgz
         """,
         tools = [helm_tool],
+        labels = labels + ["helm_chart"],
         visibility = visibility,
     )
 
-    helm_chart(
-        name = name,
-        src_chart = package,
-        values_files = values_files,
+    sh_cmd(
+        name = f"{name}_lint",
+        data = [package, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) lint $(out_location {package})
+        """,
+        labels = ["lint"] + labels,
         visibility = visibility,
     )
 
     return package
 
-def helm_chart(
+def helm_release(
     name: str,
     src_chart: str,
+    namespace: str = "default",
+    atomic: bool = True,
+    create_namespace: bool = True,
+    description: str = "",
+    force: bool = False,
+    timeout: str = "5m0s",
+    wait: bool = True,
+    wait_for_jobs: bool = True,
     values_files: list = [],
     labels: list = [],
     visibility: list = [],
 ):
     """
-    Build rule for installing and managing Helm packages.
+    Build rule for installing and managing Helm Charts as Releases.
 
     Args:
-        name: The name of the Helm Package.
-        src_chart: The target which outputs the Helm package as a `.tgz`.
+        name: The name of the Helm Release.
+        src_chart: The target which outputs the Helm Chart as a `.tgz`.
+        namespace: The namespace to deploy the Helm Release to.
+        atomic: If True, upgrade process rolls back changes made in case of
+                failed upgrade. The --wait flag will be set automatically if
+                --atomic is used.
+        create_namespace: Create the release namespace if not present.
+        description: Add a custom description.
+        force: Force resource updates through a replacement strategy.
+        timeout: Time to wait for any individual Kubernetes operation (like Jobs
+                 for hooks) (default 5m0s).
+        wait: If True, will wait until all Pods, PVCs, Services, and minimum
+              number of Pods of a Deployment, StatefulSet, or ReplicaSet are in
+              a ready state before marking the release as successful. It will
+              wait for as long as `timeout`.
+        wait_for_jobs: If True and --wait enabled, will wait until all Jobs have
+                       been completed before marking the release as successful.
+                       It will wait for as long as --timeout.
         values_files: Custom values files to use when installing or templating
                       the package.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
+    labels += DEFAULT_LABELS
 
-    values_files_targets = []
-    for trgt in values_files:
-        if not (trgt.startswith("//") or trgt.startswith(":")):
-            trgt=export_file(
-                name = f"values_{trgt}",
-                src = trgt,
-            )
-        values_files_targets += [trgt]
+    values_files_targets = _helm_release_values_files_targets(values_files)
 
-    values_files_flags = [f"-f $(out_location {f})" for f in values_files_targets]
-    values_files_cmd = " ".join(values_files_flags)
-
-    sh_cmd(
-        name = f"{name}_install",
-        data = [src_chart, helm_tool] + values_files_targets,
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) install {name} {values_files_cmd} $(out_location {src_chart}) \\\$@
-        """
+    _helm_release_template_test(
+        name,
+        helm_tool,
+        src_chart,
+        values_files_targets,
+        labels,
     )
 
-    sh_cmd(
-        name = f"{name}_uninstall",
-        data = [src_chart, helm_tool] + values_files_targets,
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) uninstall {name} \\\$@
-        """
+    _helm_release_install_or_upgrade(
+        name,
+        helm_tool,
+        src_chart,
+        values_files_targets,
+        namespace,
+        atomic,
+        create_namespace,
+        description,
+        force,
+        timeout,
+        wait,
+        wait_for_jobs,
+        labels,
+        visibility,
     )
 
-    sh_cmd(
-        name = f"{name}_template",
-        data = [src_chart, helm_tool] + values_files_targets,
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) template {name} {values_files_cmd} $(out_location {src_chart}) \\\$@
-        """
+    _helm_release_uninstall(
+        name,
+        helm_tool,
+        namespace,
+        description,
+        timeout,
+        wait,
+        labels,
+        visibility,
     )
 
-    sh_cmd(
-        name = f"{name}_lint",
-        data = [src_chart, helm_tool],
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) lint $(out_location {src_chart})
-        """,
-        labels = ["lint"]
+    _helm_release_template(
+        name,
+        helm_tool,
+        src_chart,
+        values_files_targets,
+        labels,
+        visibility,
     )
 
     for show_cmd in [
@@ -186,7 +258,173 @@ $(out_exe {helm_tool}) lint $(out_location {src_chart})
             data = [src_chart, helm_tool],
             shell = "/usr/bin/env bash",
             cmd = f"""
-    set -Eexuo pipefail
-    $(out_exe {helm_tool}) show {show_cmd} $(out_location {src_chart})
-            """
+set -Eexuo pipefail
+$(out_exe {helm_tool}) show {show_cmd} $(out_location {src_chart})
+            """,
+            labels = labels + [f"helm_show_{show_cmd}"]
         )
+
+def _helm_release_values_files_targets(values_files: list):
+    """
+    Returns the given values files as a list of Please targets, creating new
+    Please targets as necessary.
+    """
+    values_files_targets=[]
+    for trgt in values_files:
+        if not (trgt.startswith("//") or trgt.startswith(":")):
+            trgt=export_file(
+                name = f"values_{trgt}",
+                src = trgt,
+            )
+
+        values_files_targets += [canonicalise(trgt)]
+
+    return values_files_targets
+
+
+def _helm_release_template_test(
+    name: str,
+    helm_tool: str,
+    src_chart: str,
+    values_files_targets: list,
+    labels: list,
+):
+    """
+    Tests whether or not the Helm Release will template succesfully with the
+    given values files.
+    """
+    values_files_test_flags = [f"-f $(location {f})" for f in values_files_targets]
+    values_files_test_cmd = " ".join(values_files_test_flags)
+
+    return gentest(
+        name = f"{name}_template_test",
+        data = [src_chart] + values_files_targets,
+        test_cmd = f"""
+set -Eexuo pipefail
+$TOOL template --debug $(location {src_chart}) {values_files_test_cmd}
+        """,
+        no_test_output = True,
+        test_tools = [helm_tool],
+        labels = labels + ["helm_template_test"],
+    )
+
+def _helm_release_install_or_upgrade(
+    name: str,
+    helm_tool: str,
+    src_chart: str,
+    values_files_targets: list,
+    namespace: str,
+    atomic: bool,
+    create_namespace: bool,
+    description: str,
+    force: bool,
+    timeout: str,
+    wait: bool,
+    wait_for_jobs: bool,
+    labels: list,
+    visibility: list,
+):
+    values_files_flags = [f"--values $(out_location {f})" for f in values_files_targets]
+
+    args=[
+        f"$(out_exe {helm_tool})",
+        "upgrade",
+        name,
+        f"$(out_location {src_chart})",
+        "--install",
+        "--namespace", namespace,
+    ] + values_files_flags
+
+    if atomic:
+        args+=["--atomic"]
+    if create_namespace:
+        args+=["--create-namespace"]
+    if description:
+        args+=["--description", description]
+    if force:
+        args+=["--force"]
+    if timeout:
+        args+=["--timeout", timeout]
+    if wait:
+        args+=["--wait"]
+    if wait_for_jobs:
+        args+=["--wait-for-jobs"]
+
+    cmd = " ".join(args)
+
+    sh_cmd(
+        name = f"{name}_install_or_upgrade",
+        data = [src_chart, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+{cmd} \\\$@
+        """,
+        labels = labels + ["helm_install_or_upgrade"],
+    )
+
+def _helm_release_uninstall(
+    name: str,
+    helm_tool: str,
+    namespace: str,
+    description: str,
+    timeout: str,
+    wait: bool,
+    labels: list,
+    visibility: list,
+):
+    args=[
+        f"$(out_exe {helm_tool})",
+        "uninstall",
+        name,
+        "--namespace", namespace,
+    ]
+    if description:
+        args+=["--description", description]
+    if timeout:
+        args+=["--timeout", timeout]
+    if wait:
+        args+=["--wait"]
+
+    cmd = " ".join(args)
+
+    return sh_cmd(
+        name = f"{name}_uninstall",
+        data = [helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+{cmd} \\\$@
+        """,
+        labels = labels + ["helm_uninstall"],
+    )
+
+def _helm_release_template(
+    name: str,
+    helm_tool: str,
+    src_chart: str,
+    values_files_targets: list,
+    labels: list,
+    visibility: list,
+):
+    values_files_flags = [f"--values $(out_location {f})" for f in values_files_targets]
+
+    args=[
+        f"$(out_exe {helm_tool})",
+        "template",
+        name,
+        f"$(out_location {src_chart})",
+    ] + values_files_flags
+
+    cmd = " ".join(args)
+
+    sh_cmd(
+        name = f"{name}_template",
+        data = [src_chart, helm_tool] + values_files_targets,
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eeuo pipefail
+{cmd} \\\$@
+        """,
+        labels = labels + ["helm_template"],
+    )
