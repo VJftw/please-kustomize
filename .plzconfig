@@ -49,7 +49,7 @@ Help = "Sets the given Please target as the 'helm' tool."
 
 ; Use the plugin in this repository for tests.
 [Plugin "k8s"]
-HelmDeployConfig = //test/helm:deploy_config
+
 
 ; Use buildkit plugin to build demo images in tests.
 [Plugin "buildkit"]
