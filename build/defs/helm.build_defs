@@ -466,7 +466,7 @@ export IMAGE_TARGETS=""
 {helm_cmd} \\\$@
 EOF
         """,
-        labels = labels + ["helm_deploy", "helm_release"],
+        labels = labels + ["helm_deploy", "helm_release", kube_context],
     )
 
 def _set_image_targets(rule_name, src_chart):
@@ -549,7 +549,7 @@ def _helm_release_uninstall(
 set -Eexuo pipefail
 {cmd} \\\$@
         """,
-        labels = labels + ["helm_uninstall"],
+        labels = labels + ["helm_uninstall", "helm_release", kube_context],
     )
 
 def _helm_release_template(
