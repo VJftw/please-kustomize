@@ -7,7 +7,7 @@ def k3d_cluster(
     config: str,
 ):
     k3d_tool = CONFIG.K8S.K3D_TOOL
-    yq_tool = CONFIG.K8S.YQ_TOOL
+    yq_tool = CONFIG.K8S.K3D_YQ_TOOL
     k3d_helper_tool = CONFIG.K8S.K3D_HELPER_TOOL
 
     if not config.startswith("//"):
@@ -42,4 +42,41 @@ export K3D_CONFIG="$(out_location {config})"
 
 "$(out_location {k3d_helper_tool})" teardown
         """,
+    )
+
+    sh_cmd(
+        name = tag(name, "helm_post_renderer"),
+        data = [k3d_helper_tool, yq_tool, k3d_tool, config],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eeuo pipefail
+export K3D="$(out_location {k3d_tool})"
+export YQ="$(out_location {yq_tool})"
+export K3D_CONFIG="$(out_location {config})"
+
+"$(out_location {k3d_helper_tool})" helm_post_render \\\$@
+        """,
+        visibility = ["PUBLIC"]
+    )
+
+    sh_cmd(
+        name = tag(name, "image_pusher"),
+        shell = "/usr/bin/env bash",
+        data = [k3d_helper_tool, yq_tool, k3d_tool, config],
+        cmd = f"""
+set -Eeuo pipefail
+export K3D="$(out_location {k3d_tool})"
+export YQ="$(out_location {yq_tool})"
+export K3D_CONFIG="$(out_location {config})"
+
+"$(out_location {k3d_helper_tool})" load_images \\\$@
+        """,
+        visibility = ["PUBLIC"]
+    )
+
+    sh_cmd(
+        name = tag(name, "kube_context"),
+        shell = "/usr/bin/env bash",
+        cmd = f'echo "k3d-{name}"',
+        visibility = ["PUBLIC"],
     )

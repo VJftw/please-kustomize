@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 main() {
     cmd="$1"
+    shift 1
 
     case "$cmd" in
         setup)
@@ -12,8 +13,14 @@ main() {
         teardown)
             teardown
         ;;
+        load_images)
+            load_images "$@"
+        ;;
+        helm_post_render)
+            helm_post_render "$@"
+        ;;
         *)
-            util::error "Unexpected command '$cmd'."
+            log::error "Unexpected command '$cmd'."
             exit 1
         ;;
     esac
@@ -24,7 +31,7 @@ setup() {
 
     # check if k3d cluster exists.
     if ! "$K3D" cluster get "$cluster_name" &> /dev/null; then
-        util::info "Creating K3d cluster '${cluster_name}'"
+        log::info "Creating K3d cluster '${cluster_name}'"
         # setup localstorage
         localstorage="$HOME/.please-k8s/k3d/${cluster_name}/storage"
         mkdir -p "$localstorage"
@@ -33,7 +40,7 @@ setup() {
             --volume "$localstorage:/var/lib/rancher/k3s/storage"
     fi
 
-    util::success "K3d cluster '${cluster_name}' is available"
+    log::success "K3d cluster '${cluster_name}' is available"
     kubernetes_context="k3d-${cluster_name}"
     kubectl config use-context "${kubernetes_context}"
 }
@@ -43,7 +50,7 @@ teardown() {
 
     # check if k3d cluster exists.
     if ! "$K3D" cluster get "$cluster_name" &> /dev/null; then
-        util::info "K3d cluster ${cluster_name} doesn't exist"
+        log::info "K3d cluster ${cluster_name} doesn't exist"
         exit 1
     fi
 
@@ -54,21 +61,83 @@ teardown() {
     rm -rf "$localstorage"
 }
 
+load_images() {
+    local image_targets=("$@")
+    image_targets+=(${IMAGE_TARGETS:-})
+    # get registry url from config
+    local registry_name="$("$YQ" e '.registries.create.name' "$K3D_CONFIG")"
+    if [ "$registry_name" == "null" ]; then
+        log::warn "'.registries.create.name' not set in $K3D_CONFIG"
+        return
+    fi
+    local registry_port="$("$YQ" e '.registries.create.hostPort' "$K3D_CONFIG")"
+    if [ "$registry_port" == "null" ]; then
+        log::warn "'.registries.create.hostPort' not set in $K3D_CONFIG"
+        return
+    fi
+
+    local registry_url="$registry_name:$registry_port"
+
+    push_targets=("${image_targets[@]/%/_push}")
+
+    ./pleasew run parallel -a "$registry_url" "${push_targets[@]}"
+}
+
+helm_post_render() {
+    if [ ! -v IMAGE_TARGETS ]; then
+        log::warn "no images passed to update references for"
+        exit 0
+    fi
+
+    image_targets=($IMAGE_TARGETS)
+    image_update_refs_in_file_targets=()
+    for trgt in "${image_targets[@]}"; do
+        pkg="$(echo "$trgt" | cut -f1 -d:)"
+        name="$(echo "$trgt" | cut -f2 -d:)"
+        image_update_refs_in_file_targets+=("${pkg}:_${name}#update_refs_in_file")
+    done
+
+    # get registry url from config
+    local registry_name="$("$YQ" e '.registries.create.name' "$K3D_CONFIG")"
+    if [ "$registry_name" == "null" ]; then
+        log::warn "'.registries.create.name' not set in $K3D_CONFIG"
+        return
+    fi
+    local registry_port="$("$YQ" e '.registries.create.hostPort' "$K3D_CONFIG")"
+    if [ "$registry_port" == "null" ]; then
+        log::warn "'.registries.create.hostPort' not set in $K3D_CONFIG"
+        return
+    fi
+
+    local registry_url="$registry_name:$registry_port"
+
+    local all_yaml="$(mktemp)"
+    cat <&0 > "$all_yaml"
+
+    for tool in "${image_update_refs_in_file_targets[@]}"; do
+        >&2 ./pleasew run "$tool" "$all_yaml" "$registry_url"
+    done
+
+    # print out the modified yaml
+    cat "$all_yaml"
+    rm "$all_yaml"
+}
+
 # define utils
-util::info() {
-    printf "💡 %s\n" "$@"
+log::info() {
+    >&2 printf "💡 %s\n" "$@"
 }
 
-util::warn() {
-    printf "⚠️ %s\n" "$@"
+log::warn() {
+    >&2 printf "⚠️ %s\n" "$@"
 }
 
-util::error() {
-    printf "❌ %s\n" "$@"
+log::error() {
+   >&2 printf "❌ %s\n" "$@"
 }
 
-util::success() {
-  printf "✅ %s\n" "$@"
+log::success() {
+   >&2 printf "✅ %s\n" "$@"
 }
 
 

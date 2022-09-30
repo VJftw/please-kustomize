@@ -24,8 +24,8 @@ options:
       - label: ingress-ready=true
         nodeFilters:
           - agent:*
-# registries:
-#   create:
-#     name: registry.example.localhost
-#     host: "0.0.0.0"
-#     hostPort: "5000"
+registries:
+  create:
+    name: registry.example.localhost
+    host: "0.0.0.0"
+    hostPort: "5000"

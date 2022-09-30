@@ -6,37 +6,52 @@
 ; Or you can uncomment the following to pin everyone to a particular version;
 ; when you change it all users will automatically get updated.
 [please]
-version = 16.21.3
+version = 16.22.1
 
-; Define the Plugin configuration options.
+; Define the Plugin.
 [PluginDefinition]
 name = k8s
 BuildDefsDir = "build/defs"
+Description = "A please plugin for creating and working with applications that run on Kubernetes."
 
+; Plugin Kustomize configuration options
 [PluginConfig "kustomize_tool"]
 DefaultValue = "//third_party/binary/kubernetes-sigs/kustomize:kustomize"
 Optional = true
 Inherit = true
+Help = "Sets the given Please target as the 'kustomize' binary."
 
-[PluginConfig "helm_tool"]
-DefaultValue = "//third_party/binary/helm/helm:helm"
-Optional = true
-Inherit = true
-
+; Plugin K3D configuration options
 [PluginConfig "k3d_tool"]
 DefaultValue = "//third_party/binary/rancher/k3d:k3d"
 Optional = true
 Inherit = true
-
-[PluginConfig "yq_tool"]
-DefaultValue = "//third_party/binary/mikefarah/yq:yq"
-Optional = true
-Inherit = true
+Help = "Sets the given Please target as the 'k3d' binary."
 
 [PluginConfig "k3d_helper_tool"]
 DefaultValue = "//build/k3d:helper"
 Optional = true
 Inherit = true
+Help = "Sets the given Please target as the the helper which K3D uses. The default value should fit most use-cases, otherwise see 'k3d.build_defs' for the required implementation."
+
+[PluginConfig "k3d_yq_tool"]
+DefaultValue = "//third_party/binary/mikefarah/yq:yq"
+Optional = true
+Inherit = true
+Help = "Sets the given Please target as the 'yq' binary. This is used by the K3D feature."
+
+; Plugin Helm configuration options
+[PluginConfig "helm_tool"]
+DefaultValue = "//third_party/binary/helm/helm:helm"
+Optional = true
+Inherit = true
+Help = "Sets the given Please target as the 'helm' tool."
 
 ; Use the plugin in this repository for tests.
 [Plugin "k8s"]
+HelmDeployConfig = //test/helm:deploy_config
+
+; Use buildkit plugin to build demo images in tests.
+[Plugin "buildkit"]
+Target = //third_party/plugins:buildkit
+ImageRepositoryPrefix = "ghcr.io/vjftw/please-k8s"
