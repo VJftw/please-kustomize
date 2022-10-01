@@ -122,7 +122,8 @@ EOF
             "templates": src_templates,
             "values": srcs_values,
         },
-        output_dirs = ["outs"],
+        # output_dirs = ["outs"],
+        outs = [f"{name}.tgz"],
         cmd = f"""
         set -e
         chart_dir="$(mktemp -d)"
@@ -144,7 +145,7 @@ EOF
         fi
 
         mkdir -p outs/
-        $TOOL package "${{chart_dir}}" && mv *.tgz outs/
+        $TOOL package "${{chart_dir}}" && mv *.tgz $OUTS
         """,
         tools = [helm_tool],
         labels = labels + ["helm_chart"] + image_labels,
