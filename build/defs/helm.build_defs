@@ -101,7 +101,7 @@ def helm_chart(
         srcs = [context],
         outs = [f"_{name}#chart.yaml"],
         cmd = f"""
-version="$(echo "$(sha256sum $SRCS | cut -f1 -d" ")")"
+version="$(echo "$(sha256sum $SRCS | cut -f1 -d" " | cut -c1-7)")"
 cat <<EOF > $OUTS
 apiVersion: v2
 name: "{name}"
