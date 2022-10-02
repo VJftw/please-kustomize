@@ -64,6 +64,12 @@ teardown() {
 load_images() {
     local image_targets=("$@")
     image_targets+=(${IMAGE_TARGETS:-})
+
+    if [ ${#image_targets[@]} -eq 0 ]; then
+        log::info "No images to push."
+        exit 0
+    fi
+
     # get registry url from config
     local registry_name="$("$YQ" e '.registries.create.name' "$K3D_CONFIG")"
     if [ "$registry_name" == "null" ]; then
@@ -84,8 +90,13 @@ load_images() {
 }
 
 helm_post_render() {
-    if [ ! -v IMAGE_TARGETS ]; then
+    if [ -z "${IMAGE_TARGETS:-}" ]; then
         log::warn "no images passed to update references for"
+        local all_yaml="$(mktemp)"
+        cat <&0 > "$all_yaml"
+        # print out the modified yaml
+        cat "$all_yaml"
+        rm "$all_yaml"
         exit 0
     fi
 

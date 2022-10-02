@@ -29,6 +29,7 @@ def helm_chart(
     app_version: str = "0.0.0",
     src_templates: list,
     src_values: str = "",
+    subcharts: list = [],
     labels: list = [],
     visibility: list = [],
     images: list = [],
@@ -72,6 +73,7 @@ def helm_chart(
         src_templates: The files to use as templates. These will be placed in
                        the templates/ folder.
         src_values: The values file to use to use as default values.
+        subcharts: ...
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
         images: The Please 'image' targets that this Helm Chart uses. These
@@ -121,6 +123,7 @@ EOF
             "chart_yaml": [chart_yaml],
             "templates": src_templates,
             "values": srcs_values,
+            "subcharts": subcharts,
         },
         # output_dirs = ["outs"],
         outs = [f"{name}.tgz"],
@@ -144,6 +147,18 @@ EOF
             cp "$SRCS_VALUES" "${{chart_dir}}/values.yaml"
         fi
 
+        # shift subcharts into charts directory
+        if [ -n "${{SRCS_SUBCHARTS:-}}" ]; then
+            echo "dependencies:" >> "$expected_chart_yaml_path"
+            mkdir -p "${{chart_dir}}/charts"
+            for subchart in $SRCS_SUBCHARTS; do
+                subchart_name="$($TOOL show chart $subchart | grep name | cut -f2 -d: | xargs)"
+                subchart_version="$($TOOL show chart $subchart | grep version | cut -f2 -d: | xargs)"
+                echo "- name: $subchart_name\n  version: $subchart_version" >> "$expected_chart_yaml_path"
+                mv "$subchart" "${{chart_dir}}/charts/"
+            done
+        fi
+
         mkdir -p outs/
         $TOOL package "${{chart_dir}}" && mv *.tgz $OUTS
         """,
@@ -161,6 +176,30 @@ set -Eexuo pipefail
 $(out_exe {helm_tool}) lint $(out_location {package})
         """,
         labels = ["lint"] + labels,
+        visibility = visibility,
+    )
+
+    sh_cmd(
+        name = f"{name}_show_chart",
+        data = [package, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) show chart $(out_location {package})
+        """,
+        labels = ["show_chart"] + labels,
+        visibility = visibility,
+    )
+
+    sh_cmd(
+        name = f"{name}_template",
+        data = [package, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) template $(out_location {package})
+        """,
+        labels = ["template"] + labels,
         visibility = visibility,
     )
 
