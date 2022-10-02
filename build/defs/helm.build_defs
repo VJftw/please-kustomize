@@ -152,8 +152,8 @@ EOF
             echo "dependencies:" >> "$expected_chart_yaml_path"
             mkdir -p "${{chart_dir}}/charts"
             for subchart in $SRCS_SUBCHARTS; do
-                subchart_name="$($TOOL show chart $subchart | grep name | cut -f2 -d: | xargs)"
-                subchart_version="$($TOOL show chart $subchart | grep version | cut -f2 -d: | xargs)"
+                subchart_name="$($TOOL show chart $subchart | grep "^name:" | cut -f2 -d: | xargs)"
+                subchart_version="$($TOOL show chart $subchart | grep "^version:" | cut -f2 -d: | xargs)"
                 echo "- name: $subchart_name\n  version: $subchart_version" >> "$expected_chart_yaml_path"
                 mv "$subchart" "${{chart_dir}}/charts/"
             done
