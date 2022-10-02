@@ -236,7 +236,7 @@ def helm_remote_chart(
     """
     image_labels=[f"image:{img}" for img in images]
 
-    remote_file(
+    return remote_file(
         name = name,
         url = url,
         hashes = hashes,
