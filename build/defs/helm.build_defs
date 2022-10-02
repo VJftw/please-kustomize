@@ -73,7 +73,7 @@ def helm_chart(
         src_templates: The files to use as templates. These will be placed in
                        the templates/ folder.
         src_values: The values file to use to use as default values.
-        subcharts: ...
+        subcharts: The subcharts for this Helm chart.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
         images: The Please 'image' targets that this Helm Chart uses. These
@@ -95,7 +95,7 @@ def helm_chart(
 
     context=tarball(
         name = f"_{name}#context.tar",
-        srcs = src_templates + srcs_values,
+        srcs = src_templates + srcs_values + subcharts,
     )
 
     chart_yaml=genrule(
