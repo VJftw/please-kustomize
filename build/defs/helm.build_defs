@@ -179,29 +179,21 @@ $(out_exe {helm_tool}) lint $(out_location {package})
         visibility = visibility,
     )
 
-    sh_cmd(
-        name = f"{name}_show_chart",
-        data = [package, helm_tool],
-        shell = "/usr/bin/env bash",
-        cmd = f"""
+    for show_cmd in [
+        "chart",
+        "crds",
+        "readme",
+    ]:
+        sh_cmd(
+            name = f"{name}_show_{show_cmd}",
+            data = [package, helm_tool],
+            shell = "/usr/bin/env bash",
+            cmd = f"""
 set -Eexuo pipefail
-$(out_exe {helm_tool}) show chart $(out_location {package})
-        """,
-        labels = ["show_chart"] + labels,
-        visibility = visibility,
-    )
-
-    sh_cmd(
-        name = f"{name}_template",
-        data = [package, helm_tool],
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) template $(out_location {package})
-        """,
-        labels = ["template"] + labels,
-        visibility = visibility,
-    )
+$(out_exe {helm_tool}) show {show_cmd} $(out_location {package})
+            """,
+            labels = labels + [f"helm_show_{show_cmd}"]
+        )
 
     return package
 
@@ -236,7 +228,7 @@ def helm_remote_chart(
     """
     image_labels=[f"image:{img}" for img in images]
 
-    return remote_file(
+    package=remote_file(
         name = name,
         url = url,
         hashes = hashes,
@@ -245,6 +237,25 @@ def helm_remote_chart(
         visibility = visibility,
         exported_deps = images,
     )
+
+    for show_cmd in [
+        "chart",
+        "crds",
+        "readme",
+        "values",
+    ]:
+        sh_cmd(
+            name = f"{name}_show_{show_cmd}",
+            data = [package, helm_tool],
+            shell = "/usr/bin/env bash",
+            cmd = f"""
+set -Eexuo pipefail
+$(out_exe {helm_tool}) show {show_cmd} $(out_location {package})
+            """,
+            labels = labels + [f"helm_show_{show_cmd}"]
+        )
+
+    return package
 
 def helm_release(
     name: str,
@@ -372,22 +383,17 @@ def helm_release(
         visibility,
     )
 
-    for show_cmd in [
-        "chart",
-        "crds",
-        "readme",
-        "values",
-    ]:
-        sh_cmd(
-            name = f"{name}_show_{show_cmd}",
-            data = [src_chart, helm_tool],
-            shell = "/usr/bin/env bash",
-            cmd = f"""
+    sh_cmd(
+        name = f"{name}_template",
+        data = [package, helm_tool],
+        shell = "/usr/bin/env bash",
+        cmd = f"""
 set -Eexuo pipefail
-$(out_exe {helm_tool}) show {show_cmd} $(out_location {src_chart})
-            """,
-            labels = labels + [f"helm_show_{show_cmd}"]
-        )
+$(out_exe {helm_tool}) template $(out_location {package})
+        """,
+        labels = ["template"] + labels,
+        visibility = visibility,
+    )
 
 def _helm_release_values_files_targets(values_files: list):
     """
