@@ -226,6 +226,8 @@ def helm_remote_chart(
                 `VJftw/please-buildkit` build definitions. A more formal API
                 will be defined in a future version of this plugin.
     """
+    helm_tool = CONFIG.K8S.HELM_TOOL
+
     image_labels=[f"image:{img}" for img in images]
 
     package=remote_file(
