@@ -385,18 +385,6 @@ def helm_release(
         visibility,
     )
 
-    sh_cmd(
-        name = f"{name}_template",
-        data = [package, helm_tool],
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-$(out_exe {helm_tool}) template $(out_location {package})
-        """,
-        labels = ["template"] + labels,
-        visibility = visibility,
-    )
-
 def _helm_release_values_files_targets(values_files: list):
     """
     Returns the given values files as a list of Please targets, creating new
