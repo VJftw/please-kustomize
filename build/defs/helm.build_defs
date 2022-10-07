@@ -611,9 +611,9 @@ def _helm_release_template(
         f"$(out_location {src_chart})",
     ] + values_files_flags
 
-    if kube_context:
-        args+=_get_kube_context_args(kube_context, "template")
-        data+=_get_kube_context_data(kube_context, "template")
+    # if kube_context:
+    #     args+=_get_kube_context_args(kube_context, "template")
+    #     data+=_get_kube_context_data(kube_context, "template")
 
     cmd = " ".join(args)
 
