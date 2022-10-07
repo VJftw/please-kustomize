@@ -227,6 +227,7 @@ def helm_remote_chart(
                 will be defined in a future version of this plugin.
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
+    images = [canonicalise(img) for img in images]
 
     image_labels=[f"image:{img}" for img in images]
 
