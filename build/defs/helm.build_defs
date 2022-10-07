@@ -508,7 +508,7 @@ EOF
 
 def _set_image_targets(rule_name, src_chart):
     image_labels = get_labels(src_chart, "image:", False)
-    image_targets = [lbl.removeprefix("image:") for lbl in image_labels]
+    image_targets = [canonicalise(lbl.removeprefix("image:")) for lbl in image_labels]
     image_targets_bash_arr = " ".join(image_targets)
     cmd = get_command(rule_name)
     new_cmd = cmd.replace('IMAGE_TARGETS=""', f'IMAGE_TARGETS="{image_targets_bash_arr}"')
