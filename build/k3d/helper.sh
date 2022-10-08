@@ -133,7 +133,7 @@ helm_post_render() {
 
     for tool in "${image_update_refs_in_file_targets[@]}"; do
         log::info "running $tool $all_yaml $registry_url"
-        >&2 ./pleasew run "$tool" "$all_yaml" "$registry_url"
+        ./pleasew run "$tool" "$all_yaml" "$registry_url" 2>&1 > "$LOG_FILE"
     done
 
     # print out the modified yaml
