@@ -2,5 +2,5 @@ plugin_repo(
     name = "buildkit",
     owner = "VJftw",
     plugin = "please-buildkit",
-    revision = "cb86486da5b8fe4594eedfa713811bf34b95d5c9",
+    revision = "9f09eca2fcf203081a3e884b000ad5e5b820a7de",
 )
