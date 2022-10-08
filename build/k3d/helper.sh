@@ -90,6 +90,12 @@ load_images() {
 }
 
 helm_post_render() {
+    export LOG_FILE="plz-out/log/helm_post_render.log"
+    mkdir -p "$(dirname $LOG_FILE)"
+
+    log::info "---"
+    log::info "Executing helm_post_render..."
+
     if [ -z "${IMAGE_TARGETS:-}" ]; then
         log::warn "no images passed to update references for"
         local all_yaml="$(mktemp)"
@@ -126,6 +132,7 @@ helm_post_render() {
     cat <&0 > "$all_yaml"
 
     for tool in "${image_update_refs_in_file_targets[@]}"; do
+        log::info "running $tool $all_yaml $registry_url"
         >&2 ./pleasew run "$tool" "$all_yaml" "$registry_url"
     done
 
@@ -137,20 +144,31 @@ helm_post_render() {
 # define utils
 log::info() {
     >&2 printf "💡 %s\n" "$@"
+    if [ -n "${LOG_FILE:-}" ]; then
+        printf "💡 %s\n" "$@" >> "$LOG_FILE"
+    fi
 }
 
 log::warn() {
     >&2 printf "⚠️ %s\n" "$@"
+    if [ -n "${LOG_FILE:-}" ]; then
+        printf "⚠️ %s\n" "$@" >> "$LOG_FILE"
+    fi
 }
 
 log::error() {
    >&2 printf "❌ %s\n" "$@"
+   if [ -n "${LOG_FILE:-}" ]; then
+        printf "❌ %s\n" "$@" >> "$LOG_FILE"
+    fi
 }
 
 log::success() {
    >&2 printf "✅ %s\n" "$@"
+   if [ -n "${LOG_FILE:-}" ]; then
+        printf "✅ %s\n" "$@" >> "$LOG_FILE"
+    fi
 }
-
 
 # exec main
 main "$@"

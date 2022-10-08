@@ -22,6 +22,7 @@ for name in ["cluster_a", "cluster_b", "cluster_c"]:
         name = tag(name, "helm_post_renderer"),
         shell = "/usr/bin/env bash",
         cmd = """
+        >&2 echo "helm post renderer"
         all_yaml=\\\$(mktemp)
         cat <&0 > "\\\$all_yaml"
         cat "\\\$all_yaml"

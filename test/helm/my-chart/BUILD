@@ -14,7 +14,7 @@ helm_release(
 )
 
 helm_release(
-    name = "my-release_cluster_a",
+    name = "my-release-cluster-a",
     kube_context = "//test/helm/remote-clusters:cluster_a",
     src_chart = ":my-chart-alternate",
 )
