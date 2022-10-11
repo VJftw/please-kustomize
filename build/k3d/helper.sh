@@ -41,6 +41,7 @@ setup() {
     fi
 
     log::success "K3d cluster '${cluster_name}' is available"
+    "$K3D" kubeconfig merge --kubeconfig-merge-default "${cluster_name}" > /dev/null
     kubernetes_context="k3d-${cluster_name}"
     kubectl config use-context "${kubernetes_context}"
 }

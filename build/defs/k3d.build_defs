@@ -76,7 +76,12 @@ export K3D_CONFIG="$(out_location {config})"
 
     sh_cmd(
         name = tag(name, "kube_context"),
+        data = [k3d_tool],
         shell = "/usr/bin/env bash",
-        cmd = f'echo "k3d-{name}"',
+        cmd = f"""
+set -Eeuo pipefail
+$(out_exe {k3d_tool}) kubeconfig merge --kubeconfig-merge-default {name} > /dev/null
+echo "k3d-{name}"
+        """,
         visibility = ["PUBLIC"],
     )
