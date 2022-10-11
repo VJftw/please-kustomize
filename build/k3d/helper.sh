@@ -85,6 +85,7 @@ load_images() {
     local registry_url="$registry_name:$registry_port"
 
     push_targets=("${image_targets[@]/%/_push}")
+    ./pleasew -p -v=2 build "${push_targets[@]}"
 
     ./pleasew run parallel -a "$registry_url" "${push_targets[@]}"
 }
