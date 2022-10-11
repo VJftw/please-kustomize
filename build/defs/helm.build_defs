@@ -263,6 +263,7 @@ $(out_exe {helm_tool}) show {show_cmd} $(out_location {package})
 def helm_release(
     name: str,
     src_chart: str,
+    release_name: str = "",
     kube_context: str = "",
     namespace: str = "default",
     atomic: bool = True,
@@ -284,8 +285,12 @@ def helm_release(
     Build rule for installing and managing Helm Charts as Releases.
 
     Args:
-        name: The name of the Helm Release.
+        name: The name of the Please target and its subrules. This is the
+              default for the Helm Release name on the cluster.
         src_chart: The target which outputs the Helm Chart as a `.tgz`.
+        release_name: An optional custom name for the Helm Release name on the
+                      cluster. Release names are unique per Cluster namespace
+                      so these do not need to be globally unique.
         kube_context: The Kubernetes context to use from kubeconfig. If a Please
                       Target is passed to this, it must implement the following
                       subrules:
@@ -331,6 +336,9 @@ def helm_release(
     """
     helm_tool = CONFIG.K8S.HELM_TOOL
 
+    if not release_name:
+        release_name = name
+
     labels += DEFAULT_LABELS
 
     if kube_context.startswith(":"):
@@ -348,6 +356,7 @@ def helm_release(
 
     _helm_release_deploy(
         name,
+        release_name,
         helm_tool,
         src_chart,
         values_files_targets,
@@ -366,6 +375,7 @@ def helm_release(
 
     _helm_release_uninstall(
         name,
+        release_name,
         helm_tool,
         kube_context,
         namespace,
@@ -378,6 +388,7 @@ def helm_release(
 
     _helm_release_template(
         name,
+        release_name,
         helm_tool,
         src_chart,
         values_files_targets,
@@ -432,6 +443,7 @@ $TOOL template --debug $(location {src_chart}) {values_files_test_cmd}
 
 def _helm_release_deploy(
     name: str,
+    release_name: str,
     helm_tool: str,
     src_chart: str,
     values_files_targets: list,
@@ -456,7 +468,7 @@ def _helm_release_deploy(
     helm_args=[
         f"$(out_exe {helm_tool})",
         "upgrade",
-        name,
+        release_name,
         f"$(out_location {src_chart})",
         "--install",
         "--namespace", namespace,
@@ -553,6 +565,7 @@ def _get_kube_context_data(kube_context: str, helm_cmd: str):
 
 def _helm_release_uninstall(
     name: str,
+    release_name: str,
     helm_tool: str,
     kube_context: str,
     namespace: str,
@@ -565,7 +578,7 @@ def _helm_release_uninstall(
     args=[
         f"$(out_exe {helm_tool})",
         "uninstall",
-        name,
+        release_name,
         "--namespace", namespace,
     ]
 
@@ -596,6 +609,7 @@ set -Eexuo pipefail
 
 def _helm_release_template(
     name: str,
+    release_name: str,
     helm_tool: str,
     src_chart: str,
     values_files_targets: list,
@@ -612,7 +626,7 @@ def _helm_release_template(
     args=[
         f"$(out_exe {helm_tool})",
         "template",
-        name,
+        release_name,
         f"$(out_location {src_chart})",
     ] + values_files_flags
 
