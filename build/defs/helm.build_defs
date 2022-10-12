@@ -77,7 +77,7 @@ def helm_chart(
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
         images: The Please 'image' targets that this Helm Chart uses. These
-                should have a `_push` subrule what will be used to push them
+                should have a `_push` subrule that will be used to push them
                 before the Helm Chart is installed/upgraded. The `_push` subrule
                 must satisfy the same functionality as provided by the
                 `VJftw/please-buildkit` build definitions. A more formal API

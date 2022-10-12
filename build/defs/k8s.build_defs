@@ -11,13 +11,34 @@ def k8s_config(
     visibility: list = [],
     labels: list = [],
 ):
-    pkg=package_name()
-    pkg=pkg.replace("/", "_")
+    """
+    Build rule for collecting plain Kubernetes YAML configuration.
+
+    This build concatenates the given srcs Kubernetes configuration into a
+    single file in the order given by the srcs.
+
+    Args:
+        name: The name of the build rule.
+        srcs: The Kubernetes configuration YAMLs to collect into a single file.
+        images: The Please 'image' targets that the Kubernetes configuration
+                uses. These should have a `_push` subrule that can be used to
+                push them before the Kubernetes configuration is applied. The
+                `_push` subrule must satisfy the same functionality as provided
+                by the `VJftw/please-buildkit` build definitions. A more formal
+                API will be defined in a future version of this plugin.
+        create_only: Adds a 'kubectl_create' label instead of a 'kubectl_apply'
+                     label to indicate that the resources should be added using
+                     `kubectl create -f ...`. This is useful for resources that
+                     use generateName for idempotency.
+        labels: Additional Please labels.
+    """
+    images = [canonicalise(img) for img in images]
+
     # concat all yamls into one
-    consolidated_k8s_config_rule=genrule(
-        name = f"_{name}#consolidated",
+    concatenated_k8s_config_rule=genrule(
+        name = tag(name, "concatenated"),
         srcs = srcs,
-        outs = [f"{pkg}_{name}#consolidated.yaml"],
+        outs = [f"{name}.yaml"],
         cmd = """
         mapfile -t src_yamls < <(find . -name '*.yaml')
         for src in "${src_yamls[@]}"; do
@@ -31,15 +52,17 @@ def k8s_config(
     )
 
     if create_only:
-        labels += ["create_only"]
+        labels += ["kubectl_create"]
+    else:
+        labels += ["kubectl_apply"]
+
+    image_labels=[f"image:{img}" for img in images]
 
     filegroup(
         name = name,
-        srcs = [consolidated_k8s_config_rule],
-        deps = images,
-        exported_deps = images,
+        srcs = [concatenated_k8s_config_rule],
         visibility = visibility,
-        labels = labels,
+        labels = labels + ["k8s_config"] + image_labels,
     )
 
 def kustomized_config(
@@ -47,15 +70,24 @@ def kustomized_config(
     srcs: list = [],
     images: list = [],
     deps: list = [],
+    create_only: bool = False,
     visibility: list = [],
+    labels: list = [],
 ):
     """Build rule for building Kustomize projects.
 
     Args:
         name: The name of the build rule.
         srcs: The source kustomize resources including the kustomization.yaml
-        images: The docker images that the resources use. These will be added as
-                exported deps, thus are queryable later.
+        images: The Please 'image' targets that this Kustomization uses. These
+                should have a `_push` subrule that can be used to push them
+                before the Kustomization is applied. The `_push` subrule
+                must satisfy the same functionality as provided by the
+                `VJftw/please-buildkit` build definitions. A more formal API
+                will be defined in a future version of this plugin.
+        deps: Please targets that this Kustomization depends on at build time.
+              For example, other Kustomizations can be referenced to use them as
+              bases etc.
         visibility: The targets to make the kustomized configuration visible to.
     """
     kustomize_tool = CONFIG.K8S.KUSTOMIZE_TOOL
@@ -90,4 +122,6 @@ $TOOLS build $PKG > $HOME/$OUTS
         srcs = [kustomized_rule],
         visibility = visibility,
         images = images,
+        labels = ["kustomized_config"] + labels,
+        create_only = create_only,
     )
