@@ -27,8 +27,12 @@ def helm_chart(
     chart_type: str = "application",
     description: str = "A Helm chart for Kubernetes.",
     app_version: str = "0.0.0",
+    src_crds: list = [],
     src_templates: list = [],
     src_values: str = "",
+    src_values_schema: str = "",
+    src_readme: str = "",
+    src_licence: str = "",
     subcharts: list = [],
     labels: list = [],
     visibility: list = [],
@@ -70,9 +74,14 @@ def helm_chart(
                     "library". Defaults to "application".
         description: The description of the Helm package.
         app_version: The application version of the Helm package.
+        src_crds: The files containing CRDs. These must only contain CRDs.
         src_templates: The files to use as templates. These will be placed in
                        the templates/ folder.
         src_values: The values file to use to use as default values.
+        src_values_schema: A JSON Schema for imposing a structure on the
+                           values.yaml file.
+        src_readme: A human-readable README file.
+        src_licence: A plain text file containing the license for the chart.
         subcharts: The subcharts for this Helm chart.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
@@ -91,7 +100,20 @@ def helm_chart(
 
     srcs_values = []
     if src_values:
-      srcs_values += [src_values]
+      srcs_values = [src_values]
+
+    srcs_values_schema = []
+    if src_values_schema:
+        srcs_values_schema = [src_values_schema]
+
+    srcs_readme = []
+    if src_readme:
+        srcs_readme = [src_readme]
+
+    srcs_licence = []
+    if src_licence:
+        srcs_licence = [src_licence]
+
 
     context=tarball(
         name = f"_{name}#context.tar",
@@ -121,8 +143,12 @@ EOF
         name = name,
         srcs = {
             "chart_yaml": [chart_yaml],
+            "crds": src_crds,
             "templates": src_templates,
             "values": srcs_values,
+            "values_schema": srcs_values_schema,
+            "readme": srcs_readme,
+            "licence": srcs_licence,
             "subcharts": subcharts,
         },
         # output_dirs = ["outs"],
@@ -133,6 +159,14 @@ EOF
         chart_yaml_path="$SRCS_CHART_YAML"
         expected_chart_yaml_path="${{chart_dir}}/Chart.yaml"
         mv "$chart_yaml_path" "$expected_chart_yaml_path"
+
+        # shift crds into crds/
+        if [ -n "${{SRCS_CRDS:-}}" ]; then
+            mkdir -p "${{chart_dir}}/crds"
+            for crd in $SRCS_CRDS; do
+                cp -r "$crd" "${{chart_dir}}/crds/"
+            done
+        fi
 
         # shift templates into templates/
         if [ -n "${{SRCS_TEMPLATES:-}}" ]; then
@@ -145,6 +179,21 @@ EOF
         # shift values to values.yaml
         if [ -n "${{SRCS_VALUES:-}}" ]; then
             cp "$SRCS_VALUES" "${{chart_dir}}/values.yaml"
+        fi
+
+        # shift values schema to values.schema.json
+        if [ -n "${{SRCS_VALUES_SCHEMA:-}}" ]; then
+            cp "$SRCS_VALUES_SCHEMA" "${{chart_dir}}/values.schema.json"
+        fi
+
+        # shift readme to README.md
+        if [ -n "${{SRCS_README:-}}" ]; then
+            cp "$SRCS_README" "${{chart_dir}}/README.md"
+        fi
+
+        # shift licence to LICENSE
+        if [ -n "${{SRCS_LICENCE:-}}" ]; then
+            cp "$SRCS_LICENCE" "${{chart_dir}}/LICENSE"
         fi
 
         # shift subcharts into charts directory
