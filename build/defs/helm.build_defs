@@ -139,8 +139,11 @@ EOF
 
     image_labels=[f"image:{img}" for img in images]
 
+    post_build_functions = [_add_image_labels]
+
     package=genrule(
         name = name,
+        post_build = lambda rule, _cmd: [fn(rule, src_templates, subcharts) for fn in post_build_functions],
         srcs = {
             "chart_yaml": [chart_yaml],
             "crds": src_crds,
@@ -245,6 +248,22 @@ $(out_exe {helm_tool}) show {show_cmd} $(out_location {package})
         )
 
     return package
+
+def _add_image_labels(rule_name, src_templates: list, subcharts: list):
+    rule_name=canonicalise(":"+rule_name)
+
+    for src in src_templates:
+        if src.startswith("//") or src.startswith(":"):
+            src=canonicalise(src)
+            img_labels = get_labels(src, "image:", False)
+            for l in img_labels:
+                add_label(rule_name, "image:"+l)
+
+    for src in subcharts:
+        src=canonicalise(src)
+        img_labels = get_labels(src, "image:", False)
+        for l in img_labels:
+            add_label(rule_name, "image:"+l)
 
 def helm_remote_chart(
     name: str,
@@ -575,6 +594,8 @@ def _set_image_targets(rule_name, src_chart):
     cmd = get_command(rule_name)
     new_cmd = cmd.replace('IMAGE_TARGETS=""', f'IMAGE_TARGETS="{image_targets_bash_arr}"')
     set_command(rule_name, new_cmd)
+
+
 
 def _get_kube_context_args(kube_context: str, helm_cmd: str):
     if not kube_context:

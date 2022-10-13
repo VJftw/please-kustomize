@@ -34,11 +34,21 @@ def k8s_config(
     """
     images = [canonicalise(img) for img in images]
 
+    if create_only:
+        labels += ["kubectl_create"]
+    else:
+        labels += ["kubectl_apply"]
+
+    image_labels=[f"image:{img}" for img in images]
+
+    post_build_functions = [_add_image_labels]
+
     # concat all yamls into one
-    concatenated_k8s_config_rule=genrule(
-        name = tag(name, "concatenated"),
+    return genrule(
+        name = name,
         srcs = srcs,
         outs = [f"{name}.yaml"],
+        post_build = lambda rule, _cmd: [fn(rule, srcs) for fn in post_build_functions],
         cmd = """
         mapfile -t src_yamls < <(find . -name '*.yaml')
         for src in "${src_yamls[@]}"; do
@@ -49,21 +59,20 @@ def k8s_config(
             cat "$src" >> $OUTS
         done
         """,
-    )
-
-    if create_only:
-        labels += ["kubectl_create"]
-    else:
-        labels += ["kubectl_apply"]
-
-    image_labels=[f"image:{img}" for img in images]
-
-    filegroup(
-        name = name,
-        srcs = [concatenated_k8s_config_rule],
         visibility = visibility,
         labels = labels + ["k8s_config"] + image_labels,
     )
+
+
+def _add_image_labels(rule_name, srcs: list):
+    rule_name=canonicalise(":"+rule_name)
+
+    for src in srcs:
+        if src.startswith("//") or src.startswith(":"):
+            src=canonicalise(src)
+            img_labels = get_labels(src, "image:", False)
+            for l in img_labels:
+                add_label(rule_name, "image:"+l)
 
 def kustomized_config(
     name: str,
@@ -92,10 +101,16 @@ def kustomized_config(
     """
     kustomize_tool = CONFIG.K8S.KUSTOMIZE_TOOL
 
+    images = [canonicalise(img) for img in images]
+    image_labels=[f"image:{img}" for img in images]
+
+    post_build_functions = [_add_image_labels]
+
     deps = [canonicalise(d) for d in deps]
     kustomized_rule=genrule(
         name = f"{name}_kustomized",
         srcs = srcs,
+        post_build = lambda rule, _cmd: [fn(rule, srcs+[f"{d}_srcs" for d in deps]) for fn in post_build_functions],
         outs = [f"{name}_kustomized.yaml"],
         cmd = f"""
 set -Eeuo pipefail
@@ -109,12 +124,18 @@ $TOOLS build $PKG > $HOME/$OUTS
         tools = [kustomize_tool],
         deps = [f"{d}_srcs" for d in deps] + deps,
         visibility = visibility,
+        labels = image_labels,
     )
 
-    filegroup(
+    genrule(
         name = f"{name}_srcs",
+        post_build = lambda rule, _cmd: [fn(rule, srcs+deps) for fn in post_build_functions],
+        output_dirs = ["out"],
         srcs = srcs,
+        cmd = "mkdir out && for src in $SRCS; do mv $src out/; done",
         visibility = visibility,
+        deps = deps,
+        labels = image_labels,
     )
 
     return k8s_config(

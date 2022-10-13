@@ -2,7 +2,9 @@ subinclude("//build/defs:helm")
 
 helm_chart(
     name = "my-parent-chart",
-    src_templates = glob(["templates/*"]),
+    src_templates = glob(["templates/*"]) + [
+        "//test/kustomize/bases/overlay:k8s",
+    ],
     src_values = "values.yaml",
     subcharts = [
         "//test/helm/subcharts/my-sub-chart",

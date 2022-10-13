@@ -8,4 +8,5 @@ kustomized_config(
     deps = [
         "//test/kustomize/bases/base:k8s",
     ],
+    visibility = ["//test/..."]
 )
