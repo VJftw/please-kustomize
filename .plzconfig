@@ -14,6 +14,13 @@ name = k8s
 BuildDefsDir = "build/defs"
 Description = "A please plugin for creating and working with applications that run on Kubernetes."
 
+; Plugin Kubernetes configuration options
+[PluginConfig "kubectl_tool"]
+DefaultValue = "//third_party/binary/kubernetes/kubectl:kubectl"
+Optional = true
+Inherit = true
+Help = "Sets the given Please target as the 'kubectl' binary."
+
 ; Plugin Kustomize configuration options
 [PluginConfig "kustomize_tool"]
 DefaultValue = "//third_party/binary/kubernetes-sigs/kustomize:kustomize"

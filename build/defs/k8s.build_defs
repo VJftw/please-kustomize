@@ -44,7 +44,7 @@ def k8s_config(
     post_build_functions = [_add_image_labels]
 
     # concat all yamls into one
-    return genrule(
+    concatenated_rule=genrule(
         name = name,
         srcs = srcs,
         outs = [f"{name}.yaml"],
@@ -63,6 +63,115 @@ def k8s_config(
         labels = labels + ["k8s_config"] + image_labels,
     )
 
+    return concatenated_rule
+
+def k8s_deploy(
+    name: str,
+    srcs: list,
+    kube_context: str = "",
+    labels: list = [],
+    visibility: list = [],
+):
+    """
+    Build rule for applying and creating plain Kubernetes resources.
+
+    Args:
+        name: The name of the Please target and its subrules.
+        srcs: The Kubernetes resources to apply.
+        kube_context: The Kubernetes context to use from kubeconfig. If a Please
+                      Target is passed to this, it must implement the following
+                      subrules:
+                        - `:_{name}#kube_context`:
+                            A binary which prints the Kubernetes Context name to
+                            use. This may be used for authentication before
+                            `helm` is called.
+                        - `:_{name}#image_pusher`:
+                            A binary which pushes images before `helm` is
+                            called. It should accept a list of image Please
+                            targets as positional arguments.
+                       The following Environment Variables are set:
+                        - `IMAGE_TARGETS`:
+                           A space-separated list of canonical Please
+                           targets which represent the images associated
+                           with the Helm chart.
+        labels: Additional Please labels.
+        visibility: The Please targets to make this Helm package visibile to.
+    """
+    kubectl_tool = CONFIG.K8S.KUBECTL_TOOL
+
+    if kube_context.startswith(":"):
+        kube_context = canonicalise(kube_context)
+
+    data = srcs + [kubectl_tool]
+
+    pre_build_functions = [_set_image_targets, _add_kubectl_cmds]
+
+    image_pusher_cmd=""
+    if kube_context.startswith("//"):
+        image_pusher_target=_canonical_tag(kube_context, "image_pusher")
+        image_pusher_cmd=f"$(out_exe {image_pusher_target})"
+        data+=[image_pusher_target]
+
+    kube_context_cmd=""
+    if kube_context.startswith("//"):
+        kube_context_target=_canonical_tag(kube_context, "kube_context")
+        kube_context_cmd=f"\\\$($(out_exe {kube_context_target}))"
+        data+=[kube_context_target]
+
+    genrule(
+        name = f"{name}_deploy",
+        outs = [f"{name}_deploy.sh"],
+        pre_build = lambda rule: [fn(rule, srcs) for fn in pre_build_functions],
+        data = data,
+        binary = True,
+        cmd = f"""
+cat <<EOF > $OUTS
+#!/usr/bin/env bash
+set -Eeuo pipefail
+KUBECTL="$(out_exe {kubectl_tool})"
+KUBE_CONTEXT="{kube_context_cmd}"
+if [ -n "\\\$KUBE_CONTEXT" ]; then
+    KUBECTL="\\\$KUBECTL --context=\\\$KUBE_CONTEXT"
+fi
+export IMAGE_TARGETS=""
+{image_pusher_cmd}
+set -x
+#KUBECTL_CMDS
+EOF
+        """,
+        labels = labels + ["k8s_deploy", kube_context],
+    )
+
+def _set_image_targets(rule_name, srcs):
+    img_targets=[]
+    for src in srcs:
+        if src.startswith(":") or src.startswith("//"):
+            img_targets += get_labels(src, "image:", False)
+
+    img_targets_bash_arr = " ".join(img_targets)
+    cmd = get_command(rule_name)
+    new_cmd = cmd.replace('IMAGE_TARGETS=""', f'IMAGE_TARGETS="{img_targets_bash_arr}"')
+    set_command(rule_name, new_cmd)
+
+def _add_kubectl_cmds(rule_name, srcs):
+    kubectl_cmds=[]
+    kubectl="\\\$KUBECTL"
+    for src in srcs:
+        if src.startswith(":") or src.startswith("//"):
+            src=canonicalise(src)
+            if has_label(src, "kubectl_apply"):
+                kubectl_cmds+=[f"{kubectl} apply -f $(out_location {src})"]
+            elif has_label(src, "kubectl_create"):
+                kubectl_cmds+=[f"{kubectl} create -f $(out_location {src})"]
+        else:
+            log.warning(f"""
+    {rule_name} encountered a non-Please target in srcs '{src}'. This will be ignored.
+            """)
+
+    kubectls_cmd="\n".join(kubectl_cmds)
+    cmd = get_command(rule_name)
+    new_cmd = cmd.replace('#KUBECTL_CMDS', kubectls_cmd)
+    set_command(rule_name, new_cmd)
 
 def _add_image_labels(rule_name, srcs: list):
     rule_name=canonicalise(":"+rule_name)
@@ -146,3 +255,10 @@ $TOOLS build $PKG > $HOME/$OUTS
         labels = ["kustomized_config"] + labels,
         create_only = create_only,
     )
+
+def _canonical_tag(label: str, tag_str: str):
+    pkg, name = decompose(label)
+    tagged_name = tag(name, tag_str)
+    if pkg == "":
+        return canonicalise(f":{tagged_name}")
+    return f"//{pkg}:{tagged_name}"
