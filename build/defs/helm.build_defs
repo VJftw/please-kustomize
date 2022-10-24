@@ -342,10 +342,7 @@ def helm_release(
     wait: bool = True,
     wait_for_jobs: bool = True,
     values_files: list = [],
-    post_renderer: str = "",
-    post_renderer_args: list = [],
-    image_pusher: str = "",
-    image_pusher_args: str = [],
+    skip_crds: bool = False,
     labels: list = [],
     visibility: list = [],
 ):
@@ -399,6 +396,7 @@ def helm_release(
                        It will wait for as long as --timeout.
         values_files: Custom values files to use when installing or templating
                       the package.
+        skip_crds: Whether or not to skip the installation of chart CRDs.
         labels: Additional Please labels.
         visibility: The Please targets to make this Helm package visibile to.
     """
@@ -437,6 +435,7 @@ def helm_release(
         timeout,
         wait,
         wait_for_jobs,
+        skip_crds,
         labels,
         visibility,
     )
@@ -524,6 +523,7 @@ def _helm_release_deploy(
     timeout: str,
     wait: bool,
     wait_for_jobs: bool,
+    skip_crds: bool,
     labels: list,
     visibility: list,
 ):
@@ -559,6 +559,8 @@ def _helm_release_deploy(
         helm_args+=["--wait"]
     if wait_for_jobs:
         helm_args+=["--wait-for-jobs"]
+    if skip_crds:
+        helm_args+=["--skip-crds"]
 
     helm_cmd = " ".join(helm_args)
 
