@@ -928,4 +928,7 @@ def _canonical_tag(label: str, tag_str: str):
     tagged_name = tag(name, tag_str)
     if pkg == "":
         return canonicalise(f":{tagged_name}")
+    if label.startswith("///") or label.startswith("@"):
+        return f"@{pkg}:{tagged_name}"
     return f"//{pkg}:{tagged_name}"
+
