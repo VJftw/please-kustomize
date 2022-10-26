@@ -22,6 +22,67 @@ The build definitions defined in this file consider these concepts whereby:
 
 DEFAULT_LABELS=["helm"]
 
+_HELM_RELEASE_PREBUILD_MARKER_ENV="# _PREBUILD_ENV_"
+
+def helm_toolchain(
+    name: str,
+    version: str,
+    hashes: list = [],
+    plugins: list = [],
+    labels: list = [],
+    visibility: list = [],
+):
+    """
+    Build rule for setting up Helm 3 with support for plugins.
+
+    Args:
+        name: The name of the build rule.
+        version: The version of Helm to download.
+        plugins: A list of Please targets to install as Helm plugins.
+        labels: Additional Please labels.
+        visibility: The Please targets to make this Helm toolchain visibile to.
+    """
+    labels += DEFAULT_LABELS
+
+    binary=remote_file(
+        name = tag(name, "binary"),
+        binary = True,
+        extract = True,
+        hashes = hashes,
+        url = f"https://get.helm.sh/helm-v{version}-{CONFIG.OS}-{CONFIG.ARCH}.tar.gz",
+        exported_files = [f"{CONFIG.OS}-{CONFIG.ARCH}/helm"],
+    )
+
+    plugins_dir=genrule(
+        name = tag(name, "plugins"),
+        srcs = plugins,
+        outs = [tag(name, "plugins")],
+        cmd = """
+        mkdir -p $OUTS
+        for src in $SRCS; do
+            cp -r $src $OUTS/
+        done
+        """,
+    )
+
+    genrule(
+        name = name,
+        data = [binary, plugins_dir],
+        outs = [f"{name}.sh"],
+        cmd = f"""
+cat <<EOF > $OUTS
+#!/usr/bin/env bash
+set -Eeuo pipefail
+REPO_ROOT="\\\$( cd -- "\\\$(dirname "\\\$0")" >/dev/null 2>&1 ; pwd -P | sed 's#/plz-out/.*##g')"
+export HELM_PLUGINS="\\\$REPO_ROOT/$(out_location {plugins_dir})"
+"\\\$REPO_ROOT/$(out_exe {binary})" "\\\$@"
+EOF
+        """,
+        binary = True,
+        labels = labels,
+        visibility = visibility,
+    )
+
 def helm_chart(
     name: str,
     chart_type: str = "application",
@@ -410,59 +471,225 @@ def helm_release(
     if kube_context.startswith(":"):
         kube_context = canonicalise(kube_context)
 
+    src_chart = canonicalise(src_chart)
+
     values_files_targets = _helm_release_values_files_targets(values_files)
 
-    _helm_release_template_test(
-        name,
-        helm_tool,
-        src_chart,
-        values_files_targets,
-        labels,
-    )
+    helm_cmd_configs = {
+        "history": {
+            "additional_flags": {
+                # "max": 256,
+                # "output": "table",
+            },
+        },
+        "rollback": {
+            "additional_flags": {
+                "cleanup-on-fail": atomic,
+                # "dry-run": False,
+                # "force": False,
+                # "history-max": 0,
+                # "no-hooks": False,
+                # "recreate-pods": False,
+                "timeout": timeout,
+                "wait": wait,
+                "wait-for-jobs": wait_for_jobs,
+            },
+        },
+        "status": {
+            "additional_flags": {
+                # "output": "table",
+                # "revision": 1,
+                # "show-desc": False,
+            },
+        },
+        "get values": {
+            "additional_flags": {
+                # "all": False,
+                # "output": "table",
+                # "revision": 1,
+            },
+        },
+        "uninstall": {
+            "additional_flags": {
+                "description": description,
+                # "dry-run": False,
+                # "keep-history": False,
+                # "no-hooks": False,
+                "timeout": timeout,
+                "wait": wait,
+            },
+        },
+        "template": {
+            "additional_args": [src_chart],
+            "kube_context_post_renderer": True,
+            "pre_build_fns": [
+                _set_image_targets,
+            ],
+            "additional_flags": {
+                # "api-versions": [],
+                "atomic": atomic,
+                # "ca-file": "",
+                # "cert-file": "",
+                "create-namespace": create_namespace,
+                # "dependency-update": False,
+                "description": description,
+                # "devel": False,
+                # "disable-openapi-validation": False,
+                # "dry-run": False,
+                # "generate-name": False,
+                # "include-crds": False,
+                # "insecure-skip-tls-verify": False,
+                # "is-upgrade": False,
+                # "key-file": "",
+                # "keyring": "",
+                # "kube-version": "",
+                # "name-template": "",
+                # "no-hooks": False,
+                # "output-dir": "",
+                # "pass-credentials": False,
+                # "password": "",
+                # "post-renderer": "",
+                # "post-renderer-args": [],
+                # "release-name": False,
+                # "render-subchart-notes": False,
+                # "repo": "",
+                # "set": [],
+                # "set-file": [],
+                # "set-json": [],
+                # "set-string": [],
+                "skip-crds": skip_crds,
+                # "skip-tests": False,
+                "timeout": timeout,
+                # "username": "",
+                # "validate": False,
+                "values": values_files,
+                # "verify": False,
+                # "version": "",
+                "wait": wait,
+                "wait-for-jobs": wait_for_jobs,
+            },
+        },
+        "upgrade": {
+            "additional_args": [src_chart],
+            "kube_context_post_renderer": True,
+            "pre_build_fns": [
+                _set_image_targets,
+            ],
+            "additional_flags": {
+                "atomic": atomic,
+                # "ca-file": "",
+                # "cert-file": "",
+                "cleanup-on-fail": atomic,
+                "create-namespace": create_namespace,
+                # "dependency-update": False,
+                "description": description,
+                # "devel": False,
+                # "disable-openapi-validation": False,
+                # "dry-run": False,
+                # "force": False,
+                # "history-max": 0,
+                # "insecure-skip-tls-verify": False,
+                "install": True,
+                # "key-file": "",
+                # "keyring": "",
+                # "no-hooks": False,
+                # "output": "table",
+                # "pass-credentials": False,
+                # "password": "",
+                # "post-renderer": "",
+                # "post-renderer-args": [],
+                # "render-subchart-notes": False,
+                # "repo": "",
+                "reset-values": True,
+                # "reuse-values": False,
+                # "set": [],
+                # "set-file": [],
+                # "set-json": [],
+                # "set-string": [],
+                "skip-crds": skip_crds,
+                "timeout": timeout,
+                # "username": "",
+                "values": values_files_targets,
+                # "verify": False,
+                # "version": "",
+                "wait": wait,
+                "wait-for-jobs": wait_for_jobs,
+            },
+        },
+    }
 
-    _helm_release_deploy(
-        name,
-        release_name,
-        helm_tool,
-        src_chart,
-        values_files_targets,
-        kube_context,
-        namespace,
-        atomic,
-        create_namespace,
-        description,
-        force,
-        timeout,
-        wait,
-        wait_for_jobs,
-        skip_crds,
-        labels,
-        visibility,
-    )
+    if CONFIG.K8S.HELM_ENABLE_DEPLOYER == "true":
+        helm_cmd_configs["diff upgrade"] = {
+            "additional_args": [src_chart],
+            "kube_context_post_renderer": True,
+            "pre_build_fns": [
+                _set_image_targets,
+            ],
+            "additional_flags": {
+                # "allow-unreleased": False,
+                # "api-versions": [],
+                # "context": -1,
+                "detailed-exitcode": True,
+                # "devel": False,
+                # "disable-openapi-validation": False,
+                # "dry-run": False,
+                # "include-tests": False,
+                "install": True,
+                # "kube-version": "",
+                # "kubeconfig": "",
+                # "normalize-manifests": False,
+                # "output": "diff",
+                # "post-renderer": "",
+                # "repo": "",
+                "reset-values": True,
+                # "reuse-values": False,
+                # "set": [],
+                # "set-file": [],
+                # "set-json": [],
+                # "set-string": [],
+                # "show-secrets": False,
+                # "strip-trailing-cr": False,
+                # "suppress": [],
+                # "suppress-secrets": False,
+                # "three-way-merge": False,
+                "values": values_files_targets,
+                # "version": "",
+            },
+        }
 
-    _helm_release_uninstall(
-        name,
-        release_name,
-        helm_tool,
-        kube_context,
-        namespace,
-        description,
-        timeout,
-        wait,
-        labels,
-        visibility,
-    )
+    for helm_release_cmd, helm_release_cmd_config in helm_cmd_configs.items():
+        _helm_release_cmd(
+            name,
+            helm_tool,
+            kube_context,
+            namespace,
+            release_name,
+            helm_release_cmd,
+            helm_release_cmd_config,
+            labels,
+            visibility,
+        )
 
-    _helm_release_template(
-        name,
-        release_name,
-        helm_tool,
-        src_chart,
-        values_files_targets,
-        kube_context,
-        labels,
-        visibility,
-    )
+    if CONFIG.K8S.HELM_ENABLE_DEPLOYER == "true":
+        # push images
+        _push_images(
+            name,
+            src_chart,
+            kube_context,
+            labels,
+            visibility,
+        )
+
+        # deploy
+        _deploy(
+            name,
+            src_chart,
+            values_files_targets,
+            kube_context,
+            labels,
+            visibility,
+        )
+
 
 def _helm_release_values_files_targets(values_files: list):
     """
@@ -508,223 +735,193 @@ $TOOL template --debug $(location {src_chart}) {values_files_test_cmd}
         labels = labels + ["helm_template_test"],
     )
 
-def _helm_release_deploy(
+def _helm_release_cmd(
     name: str,
-    release_name: str,
     helm_tool: str,
-    src_chart: str,
-    values_files_targets: list,
     kube_context: str,
     namespace: str,
-    atomic: bool,
-    create_namespace: bool,
-    description: str,
-    force: bool,
-    timeout: str,
-    wait: bool,
-    wait_for_jobs: bool,
-    skip_crds: bool,
+    release_name: str,
+    cmd: str,
+    config: dict,
     labels: list,
     visibility: list,
 ):
-    values_files_flags = [f"--values $(out_location {f})" for f in values_files_targets]
+    safe_cmd=cmd.replace(" ", "_")
+    if "aliases" not in config:
+        config["aliases"] = []
+    if "additional_flags" not in config:
+        config["additional_flags"] = {}
+    if "additional_args" not in config:
+        config["additional_args"] = []
+    if "kube_context_post_renderer" not in config:
+        config["kube_context_post_renderer"] = False
+    if "pre_build_fns" not in config:
+        config["pre_build_fns"] = []
+    if "post_build_fns" not in config:
+        config["post_build_fns"] = []
 
-    data = [src_chart, helm_tool] + values_files_targets
+    for alias in [safe_cmd] + config["aliases"]:
+        args=[
+            f"$(out_exe {helm_tool})",
+            cmd,
+            release_name,
+            "--namespace", namespace,
+        ]
+        data = [helm_tool]
 
-    pre_build_functions = [_set_image_targets]
+        for arg in config["additional_args"]:
+            if arg.startswith("//"):
+                data += [arg]
+                args += [f"$(out_location {arg})"]
+            elif arg:
+                args += [arg]
 
-    helm_args=[
-        f"$(out_exe {helm_tool})",
-        "upgrade",
-        release_name,
-        f"$(out_location {src_chart})",
-        "--install",
-        "--namespace", namespace,
-    ] + values_files_flags
+        if kube_context:
+            if kube_context.startswith("//"):
+                kube_context_target=_canonical_tag(kube_context, "kube_context")
+                args += ["--kube-context", f"\\\$($(out_exe {kube_context_target}))"]
+                data += [kube_context_target]
+            if config["kube_context_post_renderer"]:
+                post_renderer_target=_canonical_tag(kube_context, "helm_post_renderer")
+                args += ["--post-renderer", f"$(out_exe {post_renderer_target})"]
+                data += [post_renderer_target]
 
-    if kube_context:
-        helm_args+=_get_kube_context_args(kube_context, "upgrade")
-        data+=_get_kube_context_data(kube_context, "upgrade")
-    if atomic:
-        helm_args+=["--atomic"]
-    if create_namespace:
-        helm_args+=["--create-namespace"]
-    if description:
-        helm_args+=["--description", description]
-    if helm_args:
-        helm_args+=["--force"]
-    if timeout:
-        helm_args+=["--timeout", timeout]
-    if wait:
-        helm_args+=["--wait"]
-    if wait_for_jobs:
-        helm_args+=["--wait-for-jobs"]
-    if skip_crds:
-        helm_args+=["--skip-crds"]
+        for arg_k, arg_v in config["additional_flags"].items():
+            if isinstance(arg_v, bool):
+                if arg_v:
+                    args+=[f"--{arg_k}"]
+            elif isinstance(arg_v, str):
+                if arg_v.startswith("//"):
+                    data += [arg_v]
+                    args+=[f"--{arg_k}=$(out_location {arg_v})"]
+                elif arg_v:
+                    args+=[f"--{arg_k}=\"{arg_v}\""]
+            elif isinstance(arg_v, list):
+                for v in arg_v:
+                    if v.startswith("//"):
+                        data += [v]
+                        args+=[f"--{arg_k}=$(out_location {v})"]
+                    elif v:
+                        args+=[f"--{arg_k}={v}"]
 
-    helm_cmd = " ".join(helm_args)
+        joined_args = " ".join(args)
 
-    image_pusher_cmd=""
-    if kube_context.startswith("//"):
-        image_pusher_target=_canonical_tag(kube_context, "image_pusher")
-        image_pusher_cmd=f"$(out_exe {image_pusher_target})"
-        data+=[image_pusher_target]
+        genrule(
+            name = f"{name}_{alias}",
+            outs = [f"{name}_{alias}.sh"],
+            pre_build = lambda rule: [fn(rule, data) for fn in config["pre_build_fns"]],
+            post_build = lambda rule, output: [fn(rule, output, data) for fn in config["post_build_fns"]],
+            data = data,
+            binary = True,
+            cmd = f"""
+cat <<EOF > $OUTS
+#!/usr/bin/env bash
+set -Eeuo pipefail
+{_HELM_RELEASE_PREBUILD_MARKER_ENV}
+set -x
+{joined_args} \\\$@
+EOF
+            """,
+            labels = labels + [f"helm_{safe_cmd}", "helm_release", kube_context],
+            visibility = visibility,
+        )
+
+def _set_image_targets(rule_name: str, data: list):
+    image_labels = []
+    for d in data:
+        image_labels += get_labels(d, "image:", False)
+
+    image_targets = [canonicalise(lbl.removeprefix("image:")) for lbl in image_labels]
+    image_targets_bash_arr = " ".join(image_targets)
+    cmd = get_command(rule_name)
+    new_cmd = cmd.replace(
+        _HELM_RELEASE_PREBUILD_MARKER_ENV,
+        f'{_HELM_RELEASE_PREBUILD_MARKER_ENV}\nexport IMAGE_TARGETS="{image_targets_bash_arr}"')
+    set_command(rule_name, new_cmd)
+
+
+def _push_images(
+    name: str,
+    src_chart: str,
+    kube_context: str,
+    labels: list = [],
+    visibility: list = [],
+):
+    if not kube_context or not kube_context.startswith("//"):
+        return
+
+    image_pusher_target=_canonical_tag(kube_context, "image_pusher")
+    data = [src_chart, image_pusher_target]
+
+    genrule(
+        name = f"{name}_push_images",
+        outs = [f"{name}_push_images.sh"],
+        pre_build = lambda rule: [fn(rule, data) for fn in [_set_image_targets]],
+        data = data,
+        binary = True,
+        cmd = f"""
+cat <<EOF > $OUTS
+#!/usr/bin/env bash
+set -Eeuo pipefail
+{_HELM_RELEASE_PREBUILD_MARKER_ENV}
+set -x
+$(out_exe {image_pusher_target}) \\\$@
+EOF
+        """,
+        labels = labels + [f"helm_push_images", "helm_release", kube_context],
+        visibility = visibility,
+    )
+
+def _helm_release_deploy_push_images_data(rule_name: str, data: list):
+    image_targets = []
+    for d in data:
+        image_targets += get_labels(d, "image:", False)
+    image_push_targets=[f"{t}_push" for t in image_targets]
+
+    for image_push_target in image_push_targets:
+        add_data(rule_name, image_push_target)
+        add_dep(rule_name, image_push_target)
+
+def _deploy(
+    name: str,
+    src_chart: str,
+    values_files_targets: list,
+    kube_context: str,
+    labels: list = [],
+    visibility: list = [],
+):
+    deployer_tool=CONFIG.K8S.HELM_DEPLOYER_TOOL
 
     genrule(
         name = f"{name}_deploy",
         outs = [f"{name}_deploy.sh"],
-        pre_build = lambda rule: [fn(rule, src_chart) for fn in pre_build_functions],
-        data = data,
+        pre_build = lambda rule: [fn(rule, [src_chart]) for fn in [
+            _helm_release_deploy_push_images_data,
+            _set_image_targets,
+        ]],
+        data = [
+            deployer_tool,
+            src_chart,
+            f":{name}_push_images",
+            f":{name}_upgrade",
+            f":{name}_diff_upgrade",
+        ],
         binary = True,
         cmd = f"""
 cat <<EOF > $OUTS
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export IMAGE_TARGETS=""
-{image_pusher_cmd}
-set -x
-{helm_cmd} \\\$@
+{_HELM_RELEASE_PREBUILD_MARKER_ENV}
+export HELM_DIFF_UPGRADE="$(out_exe :{name}_diff_upgrade)"
+export HELM_PUSH_IMAGES="$(out_exe :{name}_push_images)"
+export HELM_UPGRADE="$(out_exe :{name}_upgrade)"
+$(out_exe {deployer_tool})
 EOF
         """,
-        labels = labels + ["helm_deploy", "helm_release", kube_context],
+        labels = labels + [f"helm_deploy", "helm_release", kube_context],
+        visibility = visibility,
     )
 
-def _set_image_targets(rule_name, src_chart):
-    image_labels = get_labels(src_chart, "image:", False)
-    image_targets = [canonicalise(lbl.removeprefix("image:")) for lbl in image_labels]
-    image_targets_bash_arr = " ".join(image_targets)
-    cmd = get_command(rule_name)
-    new_cmd = cmd.replace('IMAGE_TARGETS=""', f'IMAGE_TARGETS="{image_targets_bash_arr}"')
-    set_command(rule_name, new_cmd)
-
-
-
-def _get_kube_context_args(kube_context: str, helm_cmd: str):
-    if not kube_context:
-        return []
-
-    if kube_context.startswith("//"):
-        args = []
-        if helm_cmd in ["upgrade", "uninstall"]:
-            kube_context_target=_canonical_tag(kube_context, "kube_context")
-            args += ["--kube-context", f"\\\$($(out_exe {kube_context_target}))"]
-
-        if helm_cmd in ["upgrade", "template"]:
-            post_renderer_target=_canonical_tag(kube_context, "helm_post_renderer")
-            args += ["--post-renderer", f"$(out_exe {post_renderer_target})"]
-
-        return args
-
-    return ["--kube-context", kube_context]
-
-def _get_kube_context_data(kube_context: str, helm_cmd: str):
-    if not kube_context:
-        return []
-
-    if kube_context.startswith("//"):
-        data = []
-        if helm_cmd in ["upgrade", "uninstall"]:
-            kube_context_target=_canonical_tag(kube_context, "kube_context")
-            data += [kube_context_target]
-
-        if helm_cmd in ["upgrade", "template"]:
-            post_renderer_target=_canonical_tag(kube_context, "helm_post_renderer")
-            data += [post_renderer_target]
-
-        return data
-
-    return []
-
-def _helm_release_uninstall(
-    name: str,
-    release_name: str,
-    helm_tool: str,
-    kube_context: str,
-    namespace: str,
-    description: str,
-    timeout: str,
-    wait: bool,
-    labels: list,
-    visibility: list,
-):
-    args=[
-        f"$(out_exe {helm_tool})",
-        "uninstall",
-        release_name,
-        "--namespace", namespace,
-    ]
-
-    data = []
-
-    if kube_context:
-        args+=_get_kube_context_args(kube_context, "uninstall")
-        data+=_get_kube_context_data(kube_context, "uninstall")
-    if description:
-        args+=["--description", description]
-    if timeout:
-        args+=["--timeout", timeout]
-    if wait:
-        args+=["--wait"]
-
-    cmd = " ".join(args)
-
-    return sh_cmd(
-        name = f"{name}_uninstall",
-        data = [helm_tool] + data,
-        shell = "/usr/bin/env bash",
-        cmd = f"""
-set -Eexuo pipefail
-{cmd} \\\$@
-        """,
-        labels = labels + ["helm_uninstall", "helm_release", kube_context],
-    )
-
-def _helm_release_template(
-    name: str,
-    release_name: str,
-    helm_tool: str,
-    src_chart: str,
-    values_files_targets: list,
-    kube_context: str,
-    labels: list,
-    visibility: list,
-):
-    values_files_flags = [f"--values $(out_location {f})" for f in values_files_targets]
-
-    data = [src_chart, helm_tool] + values_files_targets
-
-    pre_build_functions = [_set_image_targets]
-
-    args=[
-        f"$(out_exe {helm_tool})",
-        "template",
-        release_name,
-        f"$(out_location {src_chart})",
-    ] + values_files_flags
-
-    if kube_context:
-        args+=_get_kube_context_args(kube_context, "template")
-        data+=_get_kube_context_data(kube_context, "template")
-
-    cmd = " ".join(args)
-
-    genrule(
-        name = f"{name}_template",
-        outs = [f"{name}_template.sh"],
-        pre_build = lambda rule: [fn(rule, src_chart) for fn in pre_build_functions],
-        data = data,
-        binary = True,
-        cmd = f"""
-cat <<EOF > $OUTS
-#!/usr/bin/env bash
-set -Eeuo pipefail
-export IMAGE_TARGETS=""
-set -x
-{cmd} \\\$@
-EOF
-        """,
-        labels = labels + ["helm_template"],
-    )
 
 def _canonical_tag(label: str, tag_str: str):
     pkg, name = decompose(label)
