@@ -84,10 +84,11 @@ load_images() {
     fi
 
     local registry_url="$registry_name:$registry_port"
-
+    log::info "Pushing ${#image_targets[@]} images..."
     push_targets=("${image_targets[@]/%/_push}")
-    ./pleasew -p -v=2 build "${push_targets[@]}"
 
+    # '_push' targets should already be built as '_deploy' includes them as
+    # data.
     ./pleasew run parallel -a "$registry_url" "${push_targets[@]}"
 }
 

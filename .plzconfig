@@ -49,14 +49,25 @@ Help = "Sets the given Please target as the 'yq' binary. This is used by the K3D
 
 ; Plugin Helm configuration options
 [PluginConfig "helm_tool"]
-DefaultValue = "//third_party/binary/helm/helm:helm"
+DefaultValue = "//third_party/helm:helm"
 Optional = true
 Inherit = true
 Help = "Sets the given Please target as the 'helm' tool."
 
+[PluginConfig "helm_enable_deployer"]
+DefaultValue = true
+Optional = true
+Inherit = true
+Help = "Whether or not use the built-in Helm deployer functionality. If enabled, your Helm toolchain must include the helm-diff plugin (https://github.com/databus23/helm-diff)."
+
+[PluginConfig "helm_deployer_tool"]
+DefaultValue = "//tools/deployer:deployer"
+Optional = true
+Inherit = true
+Help = "Sets the given Please target as the Helm deployer tool. The default includes the helm-diff plugin (https://github.com/databus23/helm-diff)."
+
 ; Use the plugin in this repository for tests.
 [Plugin "k8s"]
-
 
 ; Use buildkit plugin to build demo images in tests.
 [Plugin "buildkit"]
