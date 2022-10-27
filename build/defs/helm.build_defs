@@ -912,10 +912,12 @@ cat <<EOF > $OUTS
 #!/usr/bin/env bash
 set -Eeuo pipefail
 {_HELM_RELEASE_PREBUILD_MARKER_ENV}
-export HELM_DIFF_UPGRADE="$(out_exe :{name}_diff_upgrade)"
-export HELM_PUSH_IMAGES="$(out_exe :{name}_push_images)"
-export HELM_UPGRADE="$(out_exe :{name}_upgrade)"
-$(out_exe {deployer_tool})
+
+$(out_exe {deployer_tool}) \\
+    idempotent_deploy \\
+    --helm_diff_upgrade_binary="$(out_exe :{name}_diff_upgrade)" \\
+    --helm_push_images_binary="$(out_exe :{name}_push_images)" \\
+    --helm_upgrade_binary="$(out_exe :{name}_upgrade)"
 EOF
         """,
         labels = labels + [f"helm_deploy", "helm_release", kube_context],

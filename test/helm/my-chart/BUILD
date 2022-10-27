@@ -11,6 +11,7 @@ helm_release(
     name = "my-release",
     kube_context = "//test/k3d:example",
     src_chart = ":my-chart-alternate",
+    labels = ["foo"],
 )
 
 helm_release(
