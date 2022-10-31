@@ -89,7 +89,7 @@ load_images() {
 
     # '_push' targets should already be built as '_deploy' includes them as
     # data.
-    ./pleasew run parallel -a "$registry_url" "${push_targets[@]}"
+    plz::run_multi -a "$registry_url" "${push_targets[@]}"
 }
 
 helm_post_render() {
@@ -136,12 +136,39 @@ helm_post_render() {
 
     for tool in "${image_update_refs_in_file_targets[@]}"; do
         log::info "running $tool $all_yaml $registry_url"
-        ./pleasew -p run "$tool" "$all_yaml" "$registry_url" 2>&1 | sed 's/^/  /' >> "$LOG_FILE"
+        plz::run "$tool" "$all_yaml" "$registry_url" 2>&1 | sed 's/^/  /' >> "$LOG_FILE"
     done
 
     # print out the modified yaml
     cat "$all_yaml"
     rm "$all_yaml"
+}
+
+plz::run_multi() {
+    args=("./pleasew" "run")
+    # enable plain output and verbosity on CI builds
+    if [[ "${CI:-}" == "true" ]]; then
+        args+=("--plain_output" "--verbosity=2")
+    fi
+
+    # allow overriding parallel with sequential for slower machines.
+    if [ -z "${PLZ_RUN_MODE:-}" ]; then
+        PLZ_RUN_MODE="parallel"
+    fi
+    args+=("$PLZ_RUN_MODE")
+    log::info "Executing ${args[*]} $*"
+    "${args[@]}" "$@"
+}
+
+plz::run() {
+    args=("./pleasew" "run")
+    # enable plain output and verbosity on CI builds
+    if [[ "${CI:-}" == "true" ]]; then
+        args+=("--plain_output" "--verbosity=2")
+    fi
+
+    log::info "Executing ${args[*]} $*"
+    "${args[@]}" "$@"
 }
 
 # define utils

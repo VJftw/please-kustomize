@@ -119,7 +119,7 @@ $(printf "%s\n" "${targets_to_deploy[@]}" | sed 's/^/    /g')
             "
             sleep 1
 
-            ./pleasew run parallel "${targets_to_deploy[@]}"
+            plz::run_multi "${targets_to_deploy[@]}"
             mapfile -t remaining_targets < \
                 <(comm -3 \
                     <(printf "%s\n" "${remaining_targets[@]}" | sort) \
@@ -131,6 +131,33 @@ $(printf "%s\n" "${targets_to_deploy[@]}" | sed 's/^/    /g')
         fi
         log::success "Completed Deployment of Stage: $stage_name"
     done
+}
+
+plz::run_multi() {
+    args=("./pleasew" "run")
+    # enable plain output and verbosity on CI builds
+    if [[ "${CI:-}" == "true" ]]; then
+        args+=("--plain_output" "--verbosity=2")
+    fi
+
+    # allow overriding parallel with sequential for slower machines.
+    if [ -z "${PLZ_RUN_MODE:-}" ]; then
+        PLZ_RUN_MODE="parallel"
+    fi
+    args+=("$PLZ_RUN_MODE")
+    log::info "Executing ${args[*]} $*"
+    "${args[@]}" "$@"
+}
+
+plz::run() {
+    args=("./pleasew" "run")
+    # enable plain output and verbosity on CI builds
+    if [[ "${CI:-}" == "true" ]]; then
+        args+=("--plain_output" "--verbosity=2")
+    fi
+
+    log::info "Executing ${args[*]} $*"
+    "${args[@]}" "$@"
 }
 
 # define utils
