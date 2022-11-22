@@ -562,7 +562,7 @@ def helm_release(
                 "timeout": timeout,
                 # "username": "",
                 # "validate": False,
-                "values": values_files,
+                "values": values_files_targets,
                 # "verify": False,
                 # "version": "",
                 "wait": wait,
