@@ -8,7 +8,7 @@ helm_chart(
     src_values = "values.yaml",
     subcharts = [
         "//test/helm/subcharts/my-sub-chart",
-    ]
+    ],
 )
 
 helm_release(

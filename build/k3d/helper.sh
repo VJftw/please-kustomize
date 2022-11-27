@@ -110,11 +110,11 @@ helm_post_render() {
     fi
 
     image_targets=($IMAGE_TARGETS)
-    image_update_refs_in_file_targets=()
+    image_replace_targets=()
     for trgt in "${image_targets[@]}"; do
         pkg="$(echo "$trgt" | cut -f1 -d:)"
         name="$(echo "$trgt" | cut -f2 -d:)"
-        image_update_refs_in_file_targets+=("${pkg}:_${name}#update_refs_in_file")
+        image_replace_targets+=("${pkg}:_${name}#replace")
     done
 
     # get registry url from config
@@ -134,7 +134,7 @@ helm_post_render() {
     local all_yaml="$(mktemp)"
     cat <&0 > "$all_yaml"
 
-    for tool in "${image_update_refs_in_file_targets[@]}"; do
+    for tool in "${image_replace_targets[@]}"; do
         log::info "running $tool $all_yaml $registry_url"
         plz::run "$tool" "$all_yaml" "$registry_url" 2>&1 | sed 's/^/  /' >> "$LOG_FILE"
     done

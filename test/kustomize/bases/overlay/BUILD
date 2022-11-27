@@ -5,10 +5,10 @@ kustomized_config(
     srcs = [
         "kustomization.yaml",
     ],
+    visibility = ["//test/..."],
     deps = [
         "//test/kustomize/bases/base:k8s",
     ],
-    visibility = ["//test/..."]
 )
 
 k8s_deploy(
