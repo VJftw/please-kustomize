@@ -136,7 +136,7 @@ helm_post_render() {
 
     for tool in "${image_replace_targets[@]}"; do
         log::info "running $tool $all_yaml $registry_url"
-        plz::run "$tool" "$all_yaml" "$registry_url" 2>&1 | sed 's/^/  /' >> "$LOG_FILE"
+        >&2 plz::run "$tool" "$all_yaml" "$registry_url"
     done
 
     # print out the modified yaml
