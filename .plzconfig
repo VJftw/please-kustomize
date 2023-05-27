@@ -6,7 +6,7 @@
 ; Or you can uncomment the following to pin everyone to a particular version;
 ; when you change it all users will automatically get updated.
 [please]
-version = 16.24.0
+version = 17.0.0
 
 ; Define the Plugin.
 [PluginDefinition]
@@ -73,4 +73,7 @@ Help = "Sets the given Please target as the Helm deployer tool. The default incl
 [Plugin "buildkit"]
 Target = //third_party/plugins:buildkit
 ImageRepositoryPrefix = "ghcr.io/vjftw/please-k8s"
-ToolVersion = "v0.0.1"
+ToolVersion = "v0.0.4"
+
+[Plugin "shell"]
+Target = //third_party/plugins:shell
