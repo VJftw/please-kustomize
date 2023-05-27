@@ -19,6 +19,7 @@ The build definitions defined in this file consider these concepts whereby:
   specify many running instances of a given `helm_chart` or `remote_file`'d Helm
   Chart with per release specific configuration as code.
 """
+subinclude("///shell//build_defs:shell")
 
 DEFAULT_LABELS=["helm"]
 
@@ -933,4 +934,3 @@ def _canonical_tag(label: str, tag_str: str):
     if label.startswith("///") or label.startswith("@"):
         return f"@{pkg}:{tagged_name}"
     return f"//{pkg}:{tagged_name}"
-

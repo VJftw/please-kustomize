@@ -1,6 +1,7 @@
 """
 Build rules for working with local [K3D](https://k3d.io) clusters.
 """
+subinclude("///shell//build_defs:shell")
 
 def k3d_cluster(
     name: str,

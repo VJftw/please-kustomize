@@ -1,3 +1,5 @@
+subinclude("///shell//build_defs:shell")
+
 for name in [
     "cluster_a",
     "cluster_b",
